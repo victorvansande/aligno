@@ -1,0 +1,373 @@
+'use strict';
+
+const DB_NAME = 'aligno';
+const STORE = 'projects';
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        d.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => { db = req.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+function tx(mode) { return db.transaction(STORE, mode).objectStore(STORE); }
+function dbAll() {
+  return new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+}
+function dbGet(id) {
+  return new Promise((res, rej) => { const r = tx('readonly').get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+}
+function dbPut(p) {
+  return new Promise((res, rej) => { const r = tx('readwrite').put(p); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+}
+function dbDel(id) {
+  return new Promise((res, rej) => { const r = tx('readwrite').delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+}
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const $ = (id) => document.getElementById(id);
+
+function fmtAgo(ts) {
+  if (!ts) return '';
+  const d = Math.floor((Date.now() - ts) / 86400000);
+  if (d <= 0) return 'vandaag';
+  if (d === 1) return 'gisteren';
+  if (d < 7) return d + ' dagen geleden';
+  if (d < 14) return '1 week geleden';
+  if (d < 60) return Math.floor(d / 7) + ' weken geleden';
+  return Math.floor(d / 30) + ' maanden geleden';
+}
+function fmtDate(ts) {
+  const dt = new Date(ts);
+  return dt.getDate() + '/' + (dt.getMonth() + 1);
+}
+
+const state = { screen: 'home', projectId: null };
+
+const screens = ['home', 'project', 'camera', 'export', 'reminders'];
+function show(name) {
+  if (state.screen === 'camera' && name !== 'camera') stopCamera();
+  screens.forEach(s => {
+    const el = $('screen-' + s);
+    if (el) el.classList.toggle('active', s === name);
+  });
+  state.screen = name;
+}
+
+async function renderHome() {
+  const list = $('projectList');
+  const projects = (await dbAll()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!projects.length) {
+    list.innerHTML = '<div class="empty">' +
+      '<div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></div>' +
+      '<h3>Start je eerste project</h3>' +
+      '<p>Een project is één reeks foto’s van hetzelfde onderwerp doorheen de tijd.</p></div>';
+    return;
+  }
+  list.innerHTML = projects.map(p => {
+    const last = p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
+    const thumb = last
+      ? '<img class="pthumb" src="' + last.dataUrl + '" alt="">'
+      : '<div class="pthumb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
+    const n = p.photos ? p.photos.length : 0;
+    return '<div class="pcard" data-open="' + p.id + '">' + thumb +
+      '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
+      '<div class="mt">' + n + ' foto’s' + (last ? ' · ' + fmtAgo(last.ts) : '') + '</div></div>' +
+      '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>';
+  }).join('');
+  list.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => openProject(el.getAttribute('data-open')));
+  });
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+async function openProject(id) {
+  state.projectId = id;
+  const p = await dbGet(id);
+  if (!p) { show('home'); renderHome(); return; }
+  $('projTitle').textContent = p.name;
+  const photos = p.photos || [];
+  $('projMeta').textContent = photos.length + ' foto’s · chronologisch';
+  const grid = $('photoGrid');
+  const empty = $('projEmpty');
+  if (!photos.length) {
+    grid.innerHTML = '';
+    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Nog geen foto’s</h3><p>Neem je eerste foto om de reeks te starten.</p></div>';
+  } else {
+    empty.innerHTML = '';
+    grid.innerHTML = photos.map((ph, i) =>
+      '<div class="ptile"><img src="' + ph.dataUrl + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
+    ).join('');
+  }
+  show('project');
+}
+
+let newProjectAfterCreate = false;
+function openNewProjectModal(thenCamera) {
+  newProjectAfterCreate = !!thenCamera;
+  $('projName').value = '';
+  $('newModal').classList.add('on');
+  setTimeout(() => $('projName').focus(), 50);
+}
+function closeNewProjectModal() { $('newModal').classList.remove('on'); }
+async function createProject() {
+  const name = $('projName').value.trim() || 'Naamloos project';
+  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), photos: [], reminder: 'uit' };
+  await dbPut(p);
+  closeNewProjectModal();
+  state.projectId = p.id;
+  if (newProjectAfterCreate) { openCamera(); } else { openProject(p.id); }
+  renderHome();
+}
+
+async function deleteCurrentProject() {
+  if (!state.projectId) return;
+  if (!confirm('Dit project en alle foto’s verwijderen?')) return;
+  await dbDel(state.projectId);
+  state.projectId = null;
+  show('home');
+  renderHome();
+}
+
+let stream = null, facing = 'environment', gridMode = 0, camHasOverlay = false;
+
+async function openCamera() {
+  const p = await dbGet(state.projectId);
+  $('camProjName').textContent = p ? p.name : 'Uitlijnen';
+  const last = p && p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
+  const ov = $('overlay'), opRow = $('opRow'), thumb = $('camLastThumb'), hint = $('camhint');
+  if (last) {
+    ov.src = last.dataUrl; ov.style.opacity = 0.5; camHasOverlay = true;
+    opRow.style.display = 'flex'; $('op').value = 50; $('opv').textContent = '50%';
+    thumb.src = last.dataUrl; thumb.style.display = 'block'; hint.style.display = 'none';
+  } else {
+    ov.removeAttribute('src'); ov.style.opacity = 0; camHasOverlay = false;
+    opRow.style.display = 'none'; thumb.style.display = 'none'; hint.style.display = 'block';
+  }
+  show('camera');
+  startCamera();
+}
+
+function setGrid() {
+  const g = $('gridlines'), cross = $('cross');
+  if (gridMode === 0) { g.style.opacity = 0; g.innerHTML = ''; cross.style.display = 'none'; return; }
+  cross.style.display = 'block';
+  g.style.opacity = 1;
+  if (gridMode === 1) {
+    g.innerHTML = '<line x1="33.3" y1="0" x2="33.3" y2="100"/><line x1="66.6" y1="0" x2="66.6" y2="100"/><line x1="0" y1="33.3" x2="100" y2="33.3"/><line x1="0" y1="66.6" x2="100" y2="66.6"/>';
+  } else {
+    let s = '';
+    for (let i = 1; i < 4; i++) { s += '<line x1="' + (i * 25) + '" y1="0" x2="' + (i * 25) + '" y2="100"/><line x1="0" y1="' + (i * 25) + '" x2="100" y2="' + (i * 25) + '"/>'; }
+    g.innerHTML = s;
+  }
+}
+
+async function startCamera() {
+  const err = $('camerr');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('camerrMsg').textContent = 'De camera werkt alleen via een beveiligde https-link. Open de app via de gedeelde link.';
+    err.classList.add('on'); return;
+  }
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing } }, audio: false });
+    $('video').srcObject = stream;
+    await $('video').play();
+    err.classList.remove('on');
+  } catch (e) {
+    const n = e && e.name;
+    $('camerrMsg').textContent = (n === 'NotAllowedError' || n === 'SecurityError')
+      ? 'Geef de browser toestemming voor de camera en probeer opnieuw.'
+      : (n === 'NotFoundError') ? 'Geen bruikbare camera gevonden, of die is in gebruik door een andere app.'
+      : (e && e.message) || 'Onbekende fout.';
+    err.classList.add('on');
+  }
+}
+function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+
+async function capturePhoto() {
+  const v = $('video');
+  if (!v.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  let url; try { url = c.toDataURL('image/jpeg', 0.85); } catch (e) { return; }
+
+  const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
+  requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
+
+  const p = await dbGet(state.projectId);
+  p.photos = p.photos || [];
+  p.photos.push({ id: uid(), dataUrl: url, ts: Date.now() });
+  p.updatedAt = Date.now();
+  await dbPut(p);
+
+  const ov = $('overlay');
+  ov.src = url; ov.style.opacity = 0.5; camHasOverlay = true;
+  $('opRow').style.display = 'flex'; $('op').value = 50; $('opv').textContent = '50%';
+  $('camLastThumb').src = url; $('camLastThumb').style.display = 'block';
+  $('camhint').style.display = 'none';
+
+  const b = $('cbadge');
+  b.textContent = 'Foto ' + p.photos.length + ' bewaard — nu uitgelijnd op deze';
+  b.style.display = 'block';
+  clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2200);
+}
+
+let expFps = 3, expTimer = null, expPhotos = [];
+async function openExport() {
+  const p = await dbGet(state.projectId);
+  expPhotos = (p.photos || []);
+  $('expCount').textContent = expPhotos.length + ' foto’s · voorbeeld';
+  $('gifResult').innerHTML = '';
+  show('export');
+  startExportPreview();
+}
+function startExportPreview() {
+  clearInterval(expTimer);
+  if (!expPhotos.length) { $('expFrame').removeAttribute('src'); return; }
+  let i = 0; $('expFrame').src = expPhotos[0].dataUrl;
+  expTimer = setInterval(() => { i = (i + 1) % expPhotos.length; $('expFrame').src = expPhotos[i].dataUrl; }, 1000 / expFps);
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (window._gifLoaded) return res();
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => { window._gifLoaded = true; res(); }; s.onerror = () => rej(new Error('load'));
+    document.head.appendChild(s);
+  });
+}
+async function loadImage(src) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+}
+
+async function makeGif() {
+  if (!expPhotos.length) return;
+  const btn = $('makeGifBtn');
+  const res = $('gifResult');
+  btn.disabled = true; btn.textContent = 'Bezig…';
+  res.innerHTML = '<p class="sub" style="text-align:center">GIF wordt gemaakt…</p>';
+  try {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+    const first = await loadImage(expPhotos[0].dataUrl);
+    const W = 480, H = Math.round(W * first.height / first.width);
+    const gif = new GIF({ workers: 2, quality: 10, width: W, height: H,
+      workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js' });
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    for (const ph of expPhotos) {
+      const im = await loadImage(ph.dataUrl);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(im, 0, 0, W, H);
+      gif.addFrame(ctx, { copy: true, delay: Math.round(1000 / expFps) });
+    }
+    gif.on('finished', (blob) => {
+      const url = URL.createObjectURL(blob);
+      res.innerHTML = '<img src="' + url + '" alt="GIF" style="width:100%; max-width:300px; display:block; margin:0 auto 12px; border-radius:12px">';
+      const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
+      const a = document.createElement('a'); a.href = url; a.download = 'aligno.gif';
+      a.className = 'btn ghost flex'; a.textContent = 'Bewaren'; a.style.textDecoration = 'none';
+      row.appendChild(a);
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'aligno.gif', { type: 'image/gif' })] })) {
+        const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Delen';
+        sh.onclick = () => navigator.share({ files: [new File([blob], 'aligno.gif', { type: 'image/gif' })], title: 'Aligno' });
+        row.appendChild(sh);
+      }
+      res.appendChild(row);
+      btn.disabled = false; btn.textContent = 'Opnieuw maken';
+    });
+    gif.render();
+  } catch (e) {
+    res.innerHTML = '<p class="note">GIF maken lukte niet. Controleer je internetverbinding en probeer opnieuw.</p>';
+    btn.disabled = false; btn.textContent = 'GIF maken';
+  }
+}
+
+const remOptions = ['Uit', 'Dagelijks', 'Wekelijks', 'Maandelijks'];
+function renderRemOpts() {
+  $('remOpts').innerHTML = remOptions.map(o => {
+    const on = o === state._rem;
+    return '<div class="optrow' + (on ? ' on' : '') + '" data-rem="' + o + '"><span class="nm">' + o + '</span>' +
+      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
+  }).join('');
+}
+async function openReminders() {
+  const p = await dbGet(state.projectId);
+  const cur = (p && p.reminder) ? p.reminder : 'Uit';
+  state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Uit';
+  renderRemOpts();
+  $('remNote').textContent = 'In deze webversie krijg je een melding zolang de app op de achtergrond actief is. Volledig betrouwbare herinneringen op een vast tijdstip komen in de native app-versie.';
+  show('reminders');
+}
+async function saveReminder() {
+  const p = await dbGet(state.projectId);
+  p.reminder = state._rem || 'Uit';
+  await dbPut(p);
+  if (p.reminder !== 'Uit' && 'Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch (e) {}
+  }
+  openProject(state.projectId);
+}
+
+function wire() {
+  $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
+  $('newCancel').addEventListener('click', closeNewProjectModal);
+  $('newCreate').addEventListener('click', createProject);
+  $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
+  $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
+
+  document.querySelectorAll('[data-nav="home"]').forEach(el => el.addEventListener('click', () => { show('home'); renderHome(); }));
+  $('delProjectBtn').addEventListener('click', deleteCurrentProject);
+  $('newPhotoBtn').addEventListener('click', openCamera);
+  $('exportBtn').addEventListener('click', openExport);
+  $('reminderBtn').addEventListener('click', openReminders);
+
+  $('exportBack').addEventListener('click', () => { clearInterval(expTimer); openProject(state.projectId); });
+  $('remBack').addEventListener('click', () => openProject(state.projectId));
+  $('remSave').addEventListener('click', saveReminder);
+  $('remOpts').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-rem]'); if (!row) return;
+    state._rem = row.getAttribute('data-rem'); renderRemOpts();
+  });
+
+  $('camClose').addEventListener('click', () => { openProject(state.projectId); });
+  $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
+  $('camRetry').addEventListener('click', startCamera);
+  $('gridBtn').addEventListener('click', () => { gridMode = (gridMode + 1) % 3; setGrid(); });
+  $('shot').addEventListener('click', capturePhoto);
+  $('op').addEventListener('input', function () {
+    $('opv').textContent = Math.round(this.value) + '%';
+    if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
+  });
+
+  $('fps').addEventListener('input', function () {
+    expFps = Math.round(this.value); $('fpsv').textContent = expFps + ' fps'; startExportPreview();
+  });
+  $('makeGifBtn').addEventListener('click', makeGif);
+
+  let deferred = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').style.display = 'flex'; });
+  $('installBtn').addEventListener('click', async () => {
+    if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('installBtn').style.display = 'none';
+  });
+}
+
+(async function init() {
+  try {
+    await openDB();
+    wire();
+    await renderHome();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  } catch (e) {
+    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Kon de app niet starten: ' + (e && e.message) + '</div>';
+  }
+})();

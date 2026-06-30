@@ -4,222 +4,273 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0f12">
-<title>Aligno — prototype</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Aligno</title>
 <style>
-  :root{ --al:#1D9E75; --al-d:#0F6E56; --ink:#0d0f12; }
+  :root{ --al:#1D9E75; --al-d:#0F6E56; --al-bg:#E1F5EE; --ink:#0d0f12;
+    --bg:#ffffff; --card:#ffffff; --line:#e8e8e6; --txt:#16181a; --txt2:#6b716e; --txt3:#9aa09c; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body{ margin:0; height:100%; background:var(--ink); color:#fff;
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--txt);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
-  #stage{ position:fixed; inset:0; background:#000; }
+  button{ font-family:inherit; }
+  .app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+  .screen{ position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg); }
+  .screen.active{ display:flex; }
+
+  .topbar{ display:flex; align-items:center; gap:8px;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; border-bottom:1px solid var(--line); }
+  .topbar .ttl{ font-size:18px; font-weight:600; flex:1; }
+  .backbtn,.tbtn{ background:none; border:none; color:var(--txt); cursor:pointer; display:flex;
+    align-items:center; justify-content:center; padding:6px; border-radius:10px; }
+  .content{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; }
+  .footer{ padding:12px 16px calc(env(safe-area-inset-bottom) + 12px); border-top:1px solid var(--line);
+    display:flex; gap:10px; }
+
+  .brand{ display:flex; align-items:center; gap:9px; font-size:21px; font-weight:600; letter-spacing:-.3px; flex:1; }
+  .sub{ color:var(--txt2); font-size:13px; margin:2px 0 16px; }
+  .sectlbl{ font-size:12px; color:var(--txt3); text-transform:none; margin:0 0 10px; }
+
+  .btn{ border:none; border-radius:12px; padding:13px 14px; font-size:15px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn.primary{ background:var(--al); color:#fff; }
+  .btn.ghost{ background:#f4f5f4; color:var(--txt); border:1px solid var(--line); }
+  .btn.block{ width:100%; }
+  .btn.flex{ flex:1; }
+  .btn.danger{ background:#fff; color:#b3261e; border:1px solid #f0c9c6; }
+
+  .pcard{ display:flex; align-items:center; gap:13px; padding:11px; border:1px solid var(--line);
+    border-radius:16px; cursor:pointer; margin-bottom:10px; background:var(--card); }
+  .pcard:active{ background:#fafafa; }
+  .pthumb{ width:58px; height:58px; border-radius:12px; flex:none; background:#eef1ee; object-fit:cover;
+    display:flex; align-items:center; justify-content:center; color:var(--txt3); overflow:hidden; }
+  .pcard .nm{ font-size:16px; font-weight:600; }
+  .pcard .mt{ font-size:13px; color:var(--txt2); }
+  .chev{ color:var(--txt3); }
+
+  .empty{ text-align:center; padding:48px 20px; color:var(--txt2); }
+  .empty .ic{ width:64px; height:64px; border-radius:50%; background:var(--al-bg); color:var(--al-d);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+  .empty h3{ font-size:17px; font-weight:600; color:var(--txt); margin:0 0 6px; }
+  .empty p{ font-size:14px; margin:0 0 20px; }
+
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .ptile{ position:relative; border-radius:12px; overflow:hidden; background:#eef1ee; aspect-ratio:1; }
+  .ptile img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .ptile .day{ position:absolute; left:0; right:0; bottom:0; font-size:10px; color:#fff; padding:3px 5px;
+    background:linear-gradient(transparent,rgba(0,0,0,.55)); }
+
+  .field{ width:100%; border:1px solid var(--line); border-radius:12px; padding:13px; font-size:16px;
+    background:#fff; color:var(--txt); }
+  .field:focus{ outline:none; border-color:var(--al); }
+
+  .seg{ display:flex; background:#f1f2f1; border-radius:12px; padding:3px; gap:3px; }
+  .seg button{ flex:1; border:none; background:transparent; color:var(--txt2); padding:11px 6px; border-radius:9px;
+    font-size:14px; cursor:pointer; }
+  .seg button.on{ background:var(--al); color:#fff; font-weight:600; }
+  .optrow{ display:flex; align-items:center; justify-content:space-between; padding:15px 14px; border:1px solid var(--line);
+    border-radius:12px; margin-bottom:10px; cursor:pointer; }
+  .optrow.on{ border-color:var(--al); background:var(--al-bg); }
+  .optrow .nm{ font-size:15px; }
+
+  .note{ font-size:13px; color:var(--txt2); background:#f7f8f7; border:1px solid var(--line); border-radius:12px;
+    padding:12px; line-height:1.55; }
+
+  .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; z-index:40; }
+  .modal-bg.on{ display:flex; }
+  .sheet{ background:#fff; width:100%; border-radius:20px 20px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 18px); }
+  .sheet h3{ margin:0 0 14px; font-size:18px; font-weight:600; }
+
+  .cam{ position:fixed; inset:0; background:#000; display:none; }
+  .cam.active{ display:block; }
   #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-  #overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-    opacity:0; pointer-events:none; transition:opacity .12s; }
-  #grid{ position:absolute; inset:0; pointer-events:none; display:none; }
-  #grid::before,#grid::after{ content:""; position:absolute; background:rgba(255,255,255,.28); }
-  #grid::before{ left:33.33%; right:33.33%; top:0; bottom:0; border-left:1px solid rgba(255,255,255,.28);
-    border-right:1px solid rgba(255,255,255,.28); background:transparent; }
-  #grid::after{ top:33.33%; bottom:33.33%; left:0; right:0; border-top:1px solid rgba(255,255,255,.28);
-    border-bottom:1px solid rgba(255,255,255,.28); background:transparent; }
-  #grid.on{ display:block; }
+  #overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; }
+  .gridlines{ position:absolute; inset:0; pointer-events:none; opacity:0; }
+  .gridlines line{ stroke:rgba(255,255,255,.32); stroke-width:1; }
+  .cross{ position:absolute; top:50%; left:50%; width:26px; height:26px; transform:translate(-50%,-50%); pointer-events:none; opacity:.5; }
+  .cross::before,.cross::after{ content:""; position:absolute; background:rgba(255,255,255,.8); }
+  .cross::before{ left:50%; top:0; bottom:0; width:1.5px; transform:translateX(-50%); }
+  .cross::after{ top:50%; left:0; right:0; height:1.5px; transform:translateY(-50%); }
 
-  .topbar{ position:absolute; top:0; left:0; right:0; padding:calc(env(safe-area-inset-top) + 14px) 18px 14px;
-    display:flex; align-items:center; justify-content:space-between;
-    background:linear-gradient(rgba(0,0,0,.45),transparent); z-index:5; }
-  .brand{ display:flex; align-items:center; gap:8px; font-size:18px; font-weight:600; letter-spacing:-.2px; }
-  .brand svg{ display:block; }
-  .iconbtn{ width:42px; height:42px; border-radius:50%; border:none; background:rgba(0,0,0,.4);
-    color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-
-  .panel{ position:absolute; left:0; right:0; bottom:0; z-index:5;
-    padding:16px 18px calc(env(safe-area-inset-bottom) + 16px);
-    background:linear-gradient(transparent,rgba(0,0,0,.65)28%); }
-  .sliderrow{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
-  .sliderrow .lbl{ font-size:13px; color:#dfe6e2; white-space:nowrap; }
-  .sliderrow .val{ font-size:13px; font-weight:600; min-width:38px; text-align:right; }
-  input[type=range]{ -webkit-appearance:none; appearance:none; flex:1; height:4px; border-radius:4px;
-    background:rgba(255,255,255,.3); outline:none; }
-  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
-    background:var(--al); border:3px solid #fff; cursor:pointer; }
-  input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background:var(--al);
-    border:3px solid #fff; cursor:pointer; }
-  input[type=range]:disabled{ opacity:.4; }
-
-  .controls{ display:flex; align-items:center; justify-content:space-between; }
-  .side{ width:64px; display:flex; justify-content:center; }
-  .pill{ background:rgba(255,255,255,.14); border:none; color:#fff; border-radius:22px; padding:10px 12px;
-    font-size:12px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:60px; }
-  .thumb{ width:52px; height:52px; border-radius:12px; border:2px solid rgba(255,255,255,.5);
-    object-fit:cover; background:#222; }
-  .shutter{ width:74px; height:74px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.45);
-    cursor:pointer; padding:0; }
+  .cam-top{ position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; background:linear-gradient(rgba(0,0,0,.5),transparent); color:#fff; }
+  .cam-top .nm{ font-size:15px; font-weight:600; }
+  .ciconbtn{ width:42px; height:42px; border-radius:50%; border:none; background:rgba(0,0,0,.4); color:#fff;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .cam-panel{ position:absolute; left:0; right:0; bottom:0; z-index:5; color:#fff;
+    padding:14px 18px calc(env(safe-area-inset-bottom) + 16px); background:linear-gradient(transparent,rgba(0,0,0,.62) 30%); }
+  .cam-sliderrow{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .cam-sliderrow .lbl{ font-size:13px; color:#e6ece9; white-space:nowrap; }
+  .cam-sliderrow .val{ font-size:13px; font-weight:600; min-width:38px; text-align:right; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; flex:1; height:4px; border-radius:4px; background:rgba(255,255,255,.3); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--al); border:3px solid #fff; }
+  input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background:var(--al); border:3px solid #fff; }
+  .cam-controls{ display:flex; align-items:center; justify-content:space-between; }
+  .cam-side{ width:64px; display:flex; justify-content:center; }
+  .cpill{ background:rgba(255,255,255,.16); border:none; color:#fff; border-radius:22px; padding:9px 10px; font-size:12px;
+    cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:58px; }
+  .cthumb{ width:50px; height:50px; border-radius:12px; border:2px solid rgba(255,255,255,.55); object-fit:cover; background:#222; }
+  .shutter{ width:74px; height:74px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.45); cursor:pointer; padding:0; }
   .shutter:active{ transform:scale(.95); }
-
-  .hint{ position:absolute; left:18px; right:18px; bottom:160px; text-align:center; font-size:14px;
-    color:#eaf2ee; background:rgba(0,0,0,.45); padding:10px 14px; border-radius:14px; z-index:4; }
   #flash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
+  .cbadge{ position:absolute; top:calc(env(safe-area-inset-top) + 60px); left:50%; transform:translateX(-50%); z-index:5;
+    font-size:12px; font-weight:600; padding:6px 13px; border-radius:20px; color:#fff; background:rgba(15,110,86,.9); display:none; }
+  .camhint{ position:absolute; left:18px; right:18px; bottom:150px; text-align:center; font-size:13px; color:#eaf2ee;
+    background:rgba(0,0,0,.45); padding:9px 13px; border-radius:13px; z-index:4; display:none; }
 
-  .err{ position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; padding:32px; z-index:9; background:var(--ink); }
-  .err.on{ display:flex; }
-  .err h2{ font-size:19px; font-weight:600; margin:0 0 10px; }
-  .err p{ font-size:14px; line-height:1.6; color:#b9c2bd; max-width:320px; margin:0 0 18px; }
-  .err button{ background:var(--al); color:#fff; border:none; border-radius:12px; padding:12px 22px;
-    font-size:15px; font-weight:600; cursor:pointer; }
-  .badge{ position:absolute; top:calc(env(safe-area-inset-top) + 64px); left:50%; transform:translateX(-50%);
-    z-index:5; font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; background:rgba(0,0,0,.5);
-    display:none; }
+  .camerr{ position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:32px; z-index:9; background:#0d0f12; color:#fff; }
+  .camerr.on{ display:flex; }
+  .camerr p{ font-size:14px; line-height:1.6; color:#b9c2bd; max-width:320px; margin:10px 0 18px; }
+
+  .expstage{ width:100%; max-width:300px; margin:0 auto; aspect-ratio:3/4; background:#eef1ee; border-radius:16px; overflow:hidden; }
+  .expstage img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .icon{ width:22px; height:22px; }
 </style>
 </head>
 <body>
-<div id="stage">
-  <video id="video" playsinline autoplay muted></video>
-  <img id="overlay" alt="">
-  <div id="grid"></div>
-  <div id="flash"></div>
+<div class="app">
 
-  <div class="topbar">
-    <span class="brand">
-      <svg width="24" height="24" viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="4" fill="none" stroke="#1D9E75" stroke-width="2"/><rect x="8" y="8" width="13" height="13" rx="4" fill="#1D9E75"/></svg>
-      Aligno
-    </span>
-    <button class="iconbtn" id="flipBtn" aria-label="Wissel camera" title="Wissel camera">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg>
-    </button>
-  </div>
-
-  <div class="badge" id="badge"></div>
-  <div class="hint" id="hint">Neem je eerste foto, of laad een bestaande foto als overlay.</div>
-
-  <div class="panel">
-    <div class="sliderrow">
-      <span class="lbl">Overlay</span>
-      <input type="range" id="op" min="0" max="100" value="50" disabled>
-      <span class="val" id="opv">50%</span>
+  <section class="screen active" id="screen-home">
+    <div class="topbar">
+      <span class="brand">
+        <svg width="26" height="26" viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="4" fill="none" stroke="#1D9E75" stroke-width="2"/><rect x="8" y="8" width="13" height="13" rx="4" fill="#1D9E75"/></svg>
+        Aligno
+      </span>
+      <button class="tbtn" id="installBtn" style="display:none" aria-label="Installeer app">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+      </button>
     </div>
-    <div class="controls">
-      <div class="side">
-        <button class="pill" id="loadBtn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-          Overlay
+    <div class="content">
+      <p class="sub">Leg verandering vast vanuit exact hetzelfde beeld.</p>
+      <p class="sectlbl">Jouw projecten</p>
+      <div id="projectList"></div>
+    </div>
+    <div class="footer">
+      <button class="btn primary block" id="newProjectBtn">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nieuw project
+      </button>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-project">
+    <div class="topbar">
+      <button class="backbtn" data-nav="home" aria-label="Terug"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="ttl" id="projTitle">Project</span>
+      <button class="tbtn" id="delProjectBtn" aria-label="Project verwijderen"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
+    </div>
+    <div class="content">
+      <p class="sectlbl" id="projMeta"></p>
+      <div class="grid3" id="photoGrid"></div>
+      <div id="projEmpty"></div>
+    </div>
+    <div class="footer" style="flex-direction:column">
+      <button class="btn primary block" id="newPhotoBtn">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Nieuwe foto
+      </button>
+      <div style="display:flex; gap:10px; width:100%">
+        <button class="btn ghost flex" id="reminderBtn">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          Herinnering
+        </button>
+        <button class="btn ghost flex" id="exportBtn">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 9v6M8 12h2"/><path d="M14 9v6M17 9v6M14 12h3"/></svg>
+          Export GIF
         </button>
       </div>
-      <button class="shutter" id="shot" aria-label="Foto nemen"></button>
-      <div class="side">
-        <a id="lastWrap" download="" style="display:none">
-          <img id="lastThumb" class="thumb" alt="laatste foto">
-        </a>
-        <button class="pill" id="gridBtn" style="display:none">Raster</button>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-export">
+    <div class="topbar">
+      <button class="backbtn" id="exportBack" aria-label="Terug"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="ttl">Exporteer als GIF</span>
+    </div>
+    <div class="content">
+      <div class="expstage"><img id="expFrame" alt=""></div>
+      <p style="text-align:center; font-size:12px; color:var(--txt3); margin:8px 0 18px" id="expCount"></p>
+      <div class="cam-sliderrow" style="color:var(--txt); margin-bottom:18px">
+        <span class="lbl" style="color:var(--txt2)">Snelheid</span>
+        <input type="range" id="fps" min="1" max="10" value="3" style="background:#e3e5e3">
+        <span class="val" id="fpsv">3 fps</span>
       </div>
+      <div id="gifResult"></div>
+    </div>
+    <div class="footer">
+      <button class="btn primary block" id="makeGifBtn">GIF maken</button>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-reminders">
+    <div class="topbar">
+      <button class="backbtn" id="remBack" aria-label="Terug"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="ttl">Herinnering</span>
+    </div>
+    <div class="content">
+      <p class="sub">Een seintje zodat je consistent blijft fotograferen.</p>
+      <div id="remOpts"></div>
+      <div class="note" style="margin-top:14px" id="remNote"></div>
+    </div>
+    <div class="footer">
+      <button class="btn primary block" id="remSave">Bewaren</button>
+    </div>
+  </section>
+
+  <div class="cam" id="screen-camera">
+    <video id="video" playsinline autoplay muted></video>
+    <img id="overlay" alt="">
+    <svg class="gridlines" id="gridlines" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    <div class="cross" id="cross" style="display:none"></div>
+    <div id="flash"></div>
+    <div class="cam-top">
+      <button class="ciconbtn" id="camClose" aria-label="Sluiten"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      <span class="nm" id="camProjName">Uitlijnen</span>
+      <button class="ciconbtn" id="flipBtn" aria-label="Wissel camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
+    </div>
+    <div class="cbadge" id="cbadge"></div>
+    <div class="camhint" id="camhint">Neem je eerste foto. Daarna verschijnt die als overlay.</div>
+    <div class="cam-panel">
+      <div class="cam-sliderrow" id="opRow" style="display:none">
+        <span class="lbl">Overlay</span>
+        <input type="range" id="op" min="0" max="100" value="50">
+        <span class="val" id="opv">50%</span>
+      </div>
+      <div class="cam-controls">
+        <div class="cam-side">
+          <button class="cpill" id="gridBtn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            Raster
+          </button>
+        </div>
+        <button class="shutter" id="shot" aria-label="Foto nemen"></button>
+        <div class="cam-side">
+          <img id="camLastThumb" class="cthumb" style="display:none" alt="vorige foto">
+        </div>
+      </div>
+    </div>
+    <div class="camerr" id="camerr">
+      <strong id="camerrTitle" style="font-size:18px">Camera niet beschikbaar</strong>
+      <p id="camerrMsg"></p>
+      <button class="btn primary" id="camRetry" style="padding:12px 22px">Opnieuw proberen</button>
     </div>
   </div>
 
-  <input type="file" id="file" accept="image/*" style="display:none">
 </div>
 
-<div class="err" id="err">
-  <h2 id="errTitle">Camera niet beschikbaar</h2>
-  <p id="errMsg"></p>
-  <button id="retry">Opnieuw proberen</button>
+<div class="modal-bg" id="newModal">
+  <div class="sheet">
+    <h3>Nieuw project</h3>
+    <input class="field" id="projName" placeholder="Bijv. Plant woonkamer" autocomplete="off">
+    <div style="display:flex; gap:10px; margin-top:16px">
+      <button class="btn ghost flex" id="newCancel">Annuleren</button>
+      <button class="btn primary flex" id="newCreate">Aanmaken</button>
+    </div>
+  </div>
 </div>
 
-<script>
-  const video=document.getElementById('video');
-  const overlay=document.getElementById('overlay');
-  const grid=document.getElementById('grid');
-  const op=document.getElementById('op');
-  const opv=document.getElementById('opv');
-  const hint=document.getElementById('hint');
-  const flash=document.getElementById('flash');
-  const badge=document.getElementById('badge');
-  const lastWrap=document.getElementById('lastWrap');
-  const lastThumb=document.getElementById('lastThumb');
-  const fileInput=document.getElementById('file');
-  const errBox=document.getElementById('err');
-  const errTitle=document.getElementById('errTitle');
-  const errMsg=document.getElementById('errMsg');
-
-  let stream=null, facing='environment', hasOverlay=false, shots=0;
-
-  function showError(title,msg){ errTitle.textContent=title; errMsg.textContent=msg; errBox.classList.add('on'); }
-  function hideError(){ errBox.classList.remove('on'); }
-
-  async function startCamera(){
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      showError('Geen camera-toegang',
-        'Je opent dit waarschijnlijk als een los bestand of zonder beveiligde verbinding. De camera werkt alleen via een https-link. Open de gedeelde link in je browser.');
-      return;
-    }
-    try{
-      if(stream){ stream.getTracks().forEach(t=>t.stop()); }
-      stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:facing } }, audio:false });
-      video.srcObject=stream;
-      await video.play();
-      hideError();
-    }catch(e){
-      if(e && (e.name==='NotAllowedError'||e.name==='SecurityError')){
-        showError('Camera geblokkeerd','Geef de browser toestemming voor de camera en probeer opnieuw.');
-      }else if(e && e.name==='NotFoundError'){
-        showError('Geen camera gevonden','Dit toestel heeft geen bruikbare camera, of die is in gebruik door een andere app.');
-      }else{
-        showError('Camera niet beschikbaar', (e && e.message) ? e.message : 'Onbekende fout.');
-      }
-    }
-  }
-
-  function setOverlaySrc(src){
-    overlay.src=src; hasOverlay=true; op.disabled=false;
-    overlay.style.opacity=(op.value/100);
-    hint.style.display='none';
-  }
-
-  op.addEventListener('input',()=>{
-    opv.textContent=Math.round(op.value)+'%';
-    if(hasOverlay) overlay.style.opacity=(op.value/100);
-  });
-
-  document.getElementById('flipBtn').addEventListener('click',()=>{
-    facing=(facing==='environment')?'user':'environment';
-    startCamera();
-  });
-
-  document.getElementById('gridBtn').addEventListener('click',()=>grid.classList.toggle('on'));
-  document.getElementById('loadBtn').addEventListener('click',()=>fileInput.click());
-
-  fileInput.addEventListener('change',e=>{
-    const f=e.target.files && e.target.files[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=()=>setOverlaySrc(r.result);
-    r.readAsDataURL(f);
-  });
-
-  document.getElementById('shot').addEventListener('click',()=>{
-    if(!video.videoWidth){ return; }
-    const c=document.createElement('canvas');
-    c.width=video.videoWidth; c.height=video.videoHeight;
-    c.getContext('2d').drawImage(video,0,0,c.width,c.height);
-    let url; try{ url=c.toDataURL('image/jpeg',0.92); }catch(err){ return; }
-
-    flash.style.transition='none'; flash.style.opacity='.9';
-    requestAnimationFrame(()=>{ flash.style.transition='opacity .45s'; flash.style.opacity='0'; });
-
-    shots++;
-    lastThumb.src=url;
-    lastWrap.href=url;
-    lastWrap.download='aligno-'+shots+'.jpg';
-    lastWrap.style.display='block';
-    document.getElementById('gridBtn').style.display='none';
-
-    setOverlaySrc(url);
-    op.value=50; opv.textContent='50%'; overlay.style.opacity=.5;
-
-    badge.textContent='Foto '+shots+' bewaard — nu uitgelijnd op deze';
-    badge.style.background='rgba(15,110,86,.85)'; badge.style.display='block';
-    setTimeout(()=>{ badge.style.display='none'; },2200);
-  });
-
-  document.getElementById('retry').addEventListener('click',startCamera);
-  document.getElementById('gridBtn').style.display='block';
-  startCamera();
-</script>
+<input type="file" id="overlayFile" accept="image/*" style="display:none">
+<script src="app.js"></script>
 </body>
 </html>
