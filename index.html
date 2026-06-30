@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f12">
+<title>Aligno — prototype</title>
+<style>
+  :root{ --al:#1D9E75; --al-d:#0F6E56; --ink:#0d0f12; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:var(--ink); color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  #stage{ position:fixed; inset:0; background:#000; }
+  #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+  #overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    opacity:0; pointer-events:none; transition:opacity .12s; }
+  #grid{ position:absolute; inset:0; pointer-events:none; display:none; }
+  #grid::before,#grid::after{ content:""; position:absolute; background:rgba(255,255,255,.28); }
+  #grid::before{ left:33.33%; right:33.33%; top:0; bottom:0; border-left:1px solid rgba(255,255,255,.28);
+    border-right:1px solid rgba(255,255,255,.28); background:transparent; }
+  #grid::after{ top:33.33%; bottom:33.33%; left:0; right:0; border-top:1px solid rgba(255,255,255,.28);
+    border-bottom:1px solid rgba(255,255,255,.28); background:transparent; }
+  #grid.on{ display:block; }
+
+  .topbar{ position:absolute; top:0; left:0; right:0; padding:calc(env(safe-area-inset-top) + 14px) 18px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(rgba(0,0,0,.45),transparent); z-index:5; }
+  .brand{ display:flex; align-items:center; gap:8px; font-size:18px; font-weight:600; letter-spacing:-.2px; }
+  .brand svg{ display:block; }
+  .iconbtn{ width:42px; height:42px; border-radius:50%; border:none; background:rgba(0,0,0,.4);
+    color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+
+  .panel{ position:absolute; left:0; right:0; bottom:0; z-index:5;
+    padding:16px 18px calc(env(safe-area-inset-bottom) + 16px);
+    background:linear-gradient(transparent,rgba(0,0,0,.65)28%); }
+  .sliderrow{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+  .sliderrow .lbl{ font-size:13px; color:#dfe6e2; white-space:nowrap; }
+  .sliderrow .val{ font-size:13px; font-weight:600; min-width:38px; text-align:right; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; flex:1; height:4px; border-radius:4px;
+    background:rgba(255,255,255,.3); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background:var(--al); border:3px solid #fff; cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background:var(--al);
+    border:3px solid #fff; cursor:pointer; }
+  input[type=range]:disabled{ opacity:.4; }
+
+  .controls{ display:flex; align-items:center; justify-content:space-between; }
+  .side{ width:64px; display:flex; justify-content:center; }
+  .pill{ background:rgba(255,255,255,.14); border:none; color:#fff; border-radius:22px; padding:10px 12px;
+    font-size:12px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:60px; }
+  .thumb{ width:52px; height:52px; border-radius:12px; border:2px solid rgba(255,255,255,.5);
+    object-fit:cover; background:#222; }
+  .shutter{ width:74px; height:74px; border-radius:50%; background:#fff; border:5px solid rgba(255,255,255,.45);
+    cursor:pointer; padding:0; }
+  .shutter:active{ transform:scale(.95); }
+
+  .hint{ position:absolute; left:18px; right:18px; bottom:160px; text-align:center; font-size:14px;
+    color:#eaf2ee; background:rgba(0,0,0,.45); padding:10px 14px; border-radius:14px; z-index:4; }
+  #flash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
+
+  .err{ position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:32px; z-index:9; background:var(--ink); }
+  .err.on{ display:flex; }
+  .err h2{ font-size:19px; font-weight:600; margin:0 0 10px; }
+  .err p{ font-size:14px; line-height:1.6; color:#b9c2bd; max-width:320px; margin:0 0 18px; }
+  .err button{ background:var(--al); color:#fff; border:none; border-radius:12px; padding:12px 22px;
+    font-size:15px; font-weight:600; cursor:pointer; }
+  .badge{ position:absolute; top:calc(env(safe-area-inset-top) + 64px); left:50%; transform:translateX(-50%);
+    z-index:5; font-size:12px; font-weight:600; padding:5px 12px; border-radius:20px; background:rgba(0,0,0,.5);
+    display:none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" playsinline autoplay muted></video>
+  <img id="overlay" alt="">
+  <div id="grid"></div>
+  <div id="flash"></div>
+
+  <div class="topbar">
+    <span class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="4" fill="none" stroke="#1D9E75" stroke-width="2"/><rect x="8" y="8" width="13" height="13" rx="4" fill="#1D9E75"/></svg>
+      Aligno
+    </span>
+    <button class="iconbtn" id="flipBtn" aria-label="Wissel camera" title="Wissel camera">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg>
+    </button>
+  </div>
+
+  <div class="badge" id="badge"></div>
+  <div class="hint" id="hint">Neem je eerste foto, of laad een bestaande foto als overlay.</div>
+
+  <div class="panel">
+    <div class="sliderrow">
+      <span class="lbl">Overlay</span>
+      <input type="range" id="op" min="0" max="100" value="50" disabled>
+      <span class="val" id="opv">50%</span>
+    </div>
+    <div class="controls">
+      <div class="side">
+        <button class="pill" id="loadBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Overlay
+        </button>
+      </div>
+      <button class="shutter" id="shot" aria-label="Foto nemen"></button>
+      <div class="side">
+        <a id="lastWrap" download="" style="display:none">
+          <img id="lastThumb" class="thumb" alt="laatste foto">
+        </a>
+        <button class="pill" id="gridBtn" style="display:none">Raster</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="file" accept="image/*" style="display:none">
+</div>
+
+<div class="err" id="err">
+  <h2 id="errTitle">Camera niet beschikbaar</h2>
+  <p id="errMsg"></p>
+  <button id="retry">Opnieuw proberen</button>
+</div>
+
+<script>
+  const video=document.getElementById('video');
+  const overlay=document.getElementById('overlay');
+  const grid=document.getElementById('grid');
+  const op=document.getElementById('op');
+  const opv=document.getElementById('opv');
+  const hint=document.getElementById('hint');
+  const flash=document.getElementById('flash');
+  const badge=document.getElementById('badge');
+  const lastWrap=document.getElementById('lastWrap');
+  const lastThumb=document.getElementById('lastThumb');
+  const fileInput=document.getElementById('file');
+  const errBox=document.getElementById('err');
+  const errTitle=document.getElementById('errTitle');
+  const errMsg=document.getElementById('errMsg');
+
+  let stream=null, facing='environment', hasOverlay=false, shots=0;
+
+  function showError(title,msg){ errTitle.textContent=title; errMsg.textContent=msg; errBox.classList.add('on'); }
+  function hideError(){ errBox.classList.remove('on'); }
+
+  async function startCamera(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showError('Geen camera-toegang',
+        'Je opent dit waarschijnlijk als een los bestand of zonder beveiligde verbinding. De camera werkt alleen via een https-link. Open de gedeelde link in je browser.');
+      return;
+    }
+    try{
+      if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+      stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:facing } }, audio:false });
+      video.srcObject=stream;
+      await video.play();
+      hideError();
+    }catch(e){
+      if(e && (e.name==='NotAllowedError'||e.name==='SecurityError')){
+        showError('Camera geblokkeerd','Geef de browser toestemming voor de camera en probeer opnieuw.');
+      }else if(e && e.name==='NotFoundError'){
+        showError('Geen camera gevonden','Dit toestel heeft geen bruikbare camera, of die is in gebruik door een andere app.');
+      }else{
+        showError('Camera niet beschikbaar', (e && e.message) ? e.message : 'Onbekende fout.');
+      }
+    }
+  }
+
+  function setOverlaySrc(src){
+    overlay.src=src; hasOverlay=true; op.disabled=false;
+    overlay.style.opacity=(op.value/100);
+    hint.style.display='none';
+  }
+
+  op.addEventListener('input',()=>{
+    opv.textContent=Math.round(op.value)+'%';
+    if(hasOverlay) overlay.style.opacity=(op.value/100);
+  });
+
+  document.getElementById('flipBtn').addEventListener('click',()=>{
+    facing=(facing==='environment')?'user':'environment';
+    startCamera();
+  });
+
+  document.getElementById('gridBtn').addEventListener('click',()=>grid.classList.toggle('on'));
+  document.getElementById('loadBtn').addEventListener('click',()=>fileInput.click());
+
+  fileInput.addEventListener('change',e=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>setOverlaySrc(r.result);
+    r.readAsDataURL(f);
+  });
+
+  document.getElementById('shot').addEventListener('click',()=>{
+    if(!video.videoWidth){ return; }
+    const c=document.createElement('canvas');
+    c.width=video.videoWidth; c.height=video.videoHeight;
+    c.getContext('2d').drawImage(video,0,0,c.width,c.height);
+    let url; try{ url=c.toDataURL('image/jpeg',0.92); }catch(err){ return; }
+
+    flash.style.transition='none'; flash.style.opacity='.9';
+    requestAnimationFrame(()=>{ flash.style.transition='opacity .45s'; flash.style.opacity='0'; });
+
+    shots++;
+    lastThumb.src=url;
+    lastWrap.href=url;
+    lastWrap.download='aligno-'+shots+'.jpg';
+    lastWrap.style.display='block';
+    document.getElementById('gridBtn').style.display='none';
+
+    setOverlaySrc(url);
+    op.value=50; opv.textContent='50%'; overlay.style.opacity=.5;
+
+    badge.textContent='Foto '+shots+' bewaard — nu uitgelijnd op deze';
+    badge.style.background='rgba(15,110,86,.85)'; badge.style.display='block';
+    setTimeout(()=>{ badge.style.display='none'; },2200);
+  });
+
+  document.getElementById('retry').addEventListener('click',startCamera);
+  document.getElementById('gridBtn').style.display='block';
+  startCamera();
+</script>
+</body>
+</html>
