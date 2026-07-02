@@ -51,7 +51,7 @@ function fmtDate(ts) {
 
 const state = { screen: 'home', projectId: null, overlayMode: 'photo' };
 
-const screens = ['home', 'project', 'camera', 'export', 'reminders'];
+const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders'];
 function show(name) {
   if (state.screen === 'camera' && name !== 'camera') stopCamera();
   screens.forEach(s => {
@@ -146,7 +146,7 @@ function computeEdges(dataUrl) {
     const img = new Image();
     img.onload = () => {
       try {
-        const maxW = 720;
+        const maxW = 900;
         const scale = Math.min(1, maxW / img.width);
         const w = Math.max(1, Math.round(img.width * scale));
         const h = Math.max(1, Math.round(img.height * scale));
@@ -156,18 +156,36 @@ function computeEdges(dataUrl) {
         const s = ctx.getImageData(0, 0, w, h).data;
         const gray = new Float32Array(w * h);
         for (let i = 0, p = 0; i < s.length; i += 4, p++) gray[p] = 0.299 * s[i] + 0.587 * s[i + 1] + 0.114 * s[i + 2];
-        const out = ctx.createImageData(w, h);
-        const o = out.data;
-        const lo = 45, hi = 165, ER = 34, EG = 224, EB = 168;
+        const mag = new Float32Array(w * h);
+        const ang = new Uint8Array(w * h);
         for (let y = 1; y < h - 1; y++) {
           for (let x = 1; x < w - 1; x++) {
             const i = y * w + x;
             const gx = -gray[i - 1 - w] + gray[i + 1 - w] - 2 * gray[i - 1] + 2 * gray[i + 1] - gray[i - 1 + w] + gray[i + 1 + w];
             const gy = -gray[i - w - 1] - 2 * gray[i - w] - gray[i - w + 1] + gray[i + w - 1] + 2 * gray[i + w] + gray[i + w + 1];
-            const mag = Math.sqrt(gx * gx + gy * gy);
-            let a = mag <= lo ? 0 : mag >= hi ? 255 : Math.round((mag - lo) / (hi - lo) * 255);
+            mag[i] = Math.sqrt(gx * gx + gy * gy);
+            let a = Math.atan2(gy, gx) * 180 / Math.PI; if (a < 0) a += 180;
+            ang[i] = a < 22.5 || a >= 157.5 ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
+          }
+        }
+        const out = ctx.createImageData(w, h);
+        const o = out.data;
+        const lo = 55, hi = 190, ER = 255, EG = 46, EB = 154;
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            const m = mag[i];
+            if (m < lo) continue;
+            const d = ang[i];
+            let n1, n2;
+            if (d === 0) { n1 = mag[i - 1]; n2 = mag[i + 1]; }
+            else if (d === 1) { n1 = mag[i - w + 1]; n2 = mag[i + w - 1]; }
+            else if (d === 2) { n1 = mag[i - w]; n2 = mag[i + w]; }
+            else { n1 = mag[i - w - 1]; n2 = mag[i + w + 1]; }
+            if (m < n1 || m < n2) continue;
             const p = i * 4;
-            o[p] = ER; o[p + 1] = EG; o[p + 2] = EB; o[p + 3] = a;
+            o[p] = ER; o[p + 1] = EG; o[p + 2] = EB;
+            o[p + 3] = m >= hi ? 255 : Math.round((m - lo) / (hi - lo) * 255);
           }
         }
         ctx.putImageData(out, 0, 0);
@@ -247,7 +265,10 @@ async function startCamera() {
   }
   try {
     if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing } }, audio: false });
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1440 } },
+      audio: false
+    });
     $('video').srcObject = stream;
     await $('video').play();
     err.classList.remove('on');
@@ -268,7 +289,7 @@ async function capturePhoto() {
   const c = document.createElement('canvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-  let url; try { url = c.toDataURL('image/jpeg', 0.85); } catch (e) { return; }
+  let url; try { url = c.toDataURL('image/jpeg', 0.95); } catch (e) { return; }
 
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
@@ -402,6 +423,7 @@ async function saveReminder() {
 }
 
 function wire() {
+  $('startBtn').addEventListener('click', () => { try { localStorage.setItem('aligno_seen', '1'); } catch (e) {} show('home'); });
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
   $('newCancel').addEventListener('click', closeNewProjectModal);
   $('newCreate').addEventListener('click', createProject);
@@ -462,6 +484,8 @@ function wire() {
     await openDB();
     wire();
     await renderHome();
+    let seen = false; try { seen = !!localStorage.getItem('aligno_seen'); } catch (e) {}
+    if (seen) show('home');
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Kon de app niet starten: ' + (e && e.message) + '</div>';
