@@ -99,6 +99,11 @@
   .cam.active{ display:block; }
   #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
   #overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; z-index:1; }
+  #overlay.edges{ filter: drop-shadow(0 0 1.1px rgba(0,0,0,.9)) drop-shadow(0 0 1.1px rgba(0,0,0,.55)); }
+  .cam-seg{ display:flex; gap:4px; padding:4px; border-radius:15px; margin-bottom:12px; }
+  .cam-seg button{ flex:1; border:none; background:transparent; color:#eef3f0; padding:10px; border-radius:11px;
+    font-size:13px; font-weight:500; cursor:pointer; letter-spacing:-.01em; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .cam-seg button.on{ background:rgba(18,162,119,.92); color:#fff; }
   .gridlines{ position:absolute; inset:0; pointer-events:none; z-index:2; opacity:0; transition:opacity .15s; }
   .gridlines.on{ opacity:1; }
   .gline{ position:absolute; background:rgba(255,255,255,.55); }
@@ -262,6 +267,10 @@
     <div class="cbadge" id="cbadge"></div>
     <div class="camhint glass" id="camhint">Neem je eerste foto. Daarna verschijnt die als overlay om op uit te lijnen.</div>
     <div class="cam-panel">
+      <div class="cam-seg glass" id="modeSeg" style="display:none">
+        <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Transparant</button>
+        <button data-om="edges" id="omEdges"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Randen</button>
+      </div>
       <div class="cam-slwrap glass" id="opRow" style="display:none">
         <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
         <input type="range" id="op" min="0" max="100" value="50">

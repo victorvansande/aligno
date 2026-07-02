@@ -49,7 +49,7 @@ function fmtDate(ts) {
   return dt.getDate() + '/' + (dt.getMonth() + 1);
 }
 
-const state = { screen: 'home', projectId: null };
+const state = { screen: 'home', projectId: null, overlayMode: 'photo' };
 
 const screens = ['home', 'project', 'camera', 'export', 'reminders'];
 function show(name) {
@@ -138,20 +138,88 @@ async function deleteCurrentProject() {
 }
 
 let stream = null, facing = 'environment', gridMode = 0, camHasOverlay = false;
+let overlayRaw = null, overlayEdge = null;
+
+function computeEdges(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const maxW = 720;
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, w, h);
+        const s = ctx.getImageData(0, 0, w, h).data;
+        const gray = new Float32Array(w * h);
+        for (let i = 0, p = 0; i < s.length; i += 4, p++) gray[p] = 0.299 * s[i] + 0.587 * s[i + 1] + 0.114 * s[i + 2];
+        const out = ctx.createImageData(w, h);
+        const o = out.data;
+        const lo = 45, hi = 165, ER = 34, EG = 224, EB = 168;
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            const gx = -gray[i - 1 - w] + gray[i + 1 - w] - 2 * gray[i - 1] + 2 * gray[i + 1] - gray[i - 1 + w] + gray[i + 1 + w];
+            const gy = -gray[i - w - 1] - 2 * gray[i - w] - gray[i - w + 1] + gray[i + w - 1] + 2 * gray[i + w] + gray[i + w + 1];
+            const mag = Math.sqrt(gx * gx + gy * gy);
+            let a = mag <= lo ? 0 : mag >= hi ? 255 : Math.round((mag - lo) / (hi - lo) * 255);
+            const p = i * 4;
+            o[p] = ER; o[p + 1] = EG; o[p + 2] = EB; o[p + 3] = a;
+          }
+        }
+        ctx.putImageData(out, 0, 0);
+        resolve(c.toDataURL('image/png'));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function syncModeSeg() {
+  $('omPhoto').classList.toggle('on', state.overlayMode === 'photo');
+  $('omEdges').classList.toggle('on', state.overlayMode === 'edges');
+}
+function hideOverlay() {
+  overlayRaw = null; overlayEdge = null; camHasOverlay = false;
+  const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges');
+  $('opRow').style.display = 'none'; $('modeSeg').style.display = 'none';
+  $('camLastThumb').style.display = 'none'; $('camhint').style.display = 'block';
+}
+function setOverlay(raw) {
+  overlayRaw = raw; overlayEdge = null; camHasOverlay = true;
+  $('op').value = 50; $('opv').textContent = '50%';
+  $('opRow').style.display = 'flex'; $('modeSeg').style.display = 'flex';
+  $('camLastThumb').src = raw; $('camLastThumb').style.display = 'block';
+  $('camhint').style.display = 'none';
+  applyOverlay();
+}
+async function applyOverlay() {
+  const ov = $('overlay');
+  if (!overlayRaw) return;
+  ov.style.opacity = $('op').value / 100;
+  if (state.overlayMode === 'edges') {
+    if (!overlayEdge) {
+      $('omEdges').textContent = 'Bezig…';
+      try { overlayEdge = await computeEdges(overlayRaw); }
+      catch (e) { overlayEdge = overlayRaw; }
+      $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Randen';
+      if (state.overlayMode !== 'edges') return;
+    }
+    ov.src = overlayEdge; ov.classList.add('edges');
+  } else {
+    ov.src = overlayRaw; ov.classList.remove('edges');
+  }
+}
 
 async function openCamera() {
   const p = await dbGet(state.projectId);
   $('camProjName').textContent = p ? p.name : 'Uitlijnen';
   const last = p && p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
-  const ov = $('overlay'), opRow = $('opRow'), thumb = $('camLastThumb'), hint = $('camhint');
-  if (last) {
-    ov.src = last.dataUrl; ov.style.opacity = 0.5; camHasOverlay = true;
-    opRow.style.display = 'flex'; $('op').value = 50; $('opv').textContent = '50%';
-    thumb.src = last.dataUrl; thumb.style.display = 'block'; hint.style.display = 'none';
-  } else {
-    ov.removeAttribute('src'); ov.style.opacity = 0; camHasOverlay = false;
-    opRow.style.display = 'none'; thumb.style.display = 'none'; hint.style.display = 'block';
-  }
+  syncModeSeg();
+  if (last) setOverlay(last.dataUrl); else hideOverlay();
   show('camera');
   startCamera();
 }
@@ -210,11 +278,7 @@ async function capturePhoto() {
   p.updatedAt = Date.now();
   await dbPut(p);
 
-  const ov = $('overlay');
-  ov.src = url; ov.style.opacity = 0.5; camHasOverlay = true;
-  $('opRow').style.display = 'flex'; $('op').value = 50; $('opv').textContent = '50%';
-  $('camLastThumb').src = url; $('camLastThumb').style.display = 'block';
-  $('camhint').style.display = 'none';
+  setOverlay(url);
 
   const b = $('cbadge');
   b.textContent = 'Foto ' + p.photos.length + ' bewaard — nu uitgelijnd op deze';
@@ -349,6 +413,11 @@ function wire() {
   $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
   $('camRetry').addEventListener('click', startCamera);
   $('gridBtn').addEventListener('click', () => { gridMode = (gridMode + 1) % 3; setGrid(); });
+  $('modeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-om]'); if (!b) return;
+    state.overlayMode = b.getAttribute('data-om');
+    syncModeSeg(); applyOverlay();
+  });
   $('shot').addEventListener('click', capturePhoto);
   $('op').addEventListener('input', function () {
     $('opv').textContent = Math.round(this.value) + '%';
