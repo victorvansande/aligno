@@ -157,17 +157,17 @@ async function openCamera() {
 }
 
 function setGrid() {
-  const g = $('gridlines'), cross = $('cross');
-  if (gridMode === 0) { g.style.opacity = 0; g.innerHTML = ''; cross.style.display = 'none'; return; }
-  cross.style.display = 'block';
-  g.style.opacity = 1;
-  if (gridMode === 1) {
-    g.innerHTML = '<line x1="33.3" y1="0" x2="33.3" y2="100"/><line x1="66.6" y1="0" x2="66.6" y2="100"/><line x1="0" y1="33.3" x2="100" y2="33.3"/><line x1="0" y1="66.6" x2="100" y2="66.6"/>';
-  } else {
-    let s = '';
-    for (let i = 1; i < 4; i++) { s += '<line x1="' + (i * 25) + '" y1="0" x2="' + (i * 25) + '" y2="100"/><line x1="0" y1="' + (i * 25) + '" x2="100" y2="' + (i * 25) + '"/>'; }
-    g.innerHTML = s;
-  }
+  const g = $('gridlines'), btn = $('gridBtn'), lbl = $('gridLbl');
+  g.innerHTML = '';
+  if (gridMode === 0) { g.classList.remove('on'); btn.classList.remove('act'); lbl.textContent = 'Raster'; return; }
+  g.classList.add('on'); btn.classList.add('act');
+  const fracs = gridMode === 1 ? [33.333, 66.667] : [25, 50, 75];
+  fracs.forEach(p => {
+    const v = document.createElement('div'); v.className = 'gline v'; v.style.left = p + '%'; g.appendChild(v);
+    const h = document.createElement('div'); h.className = 'gline h'; h.style.top = p + '%'; g.appendChild(h);
+  });
+  g.appendChild(Object.assign(document.createElement('div'), { className: 'gcross' }));
+  lbl.textContent = gridMode === 1 ? 'Derden' : 'Fijn';
 }
 
 async function startCamera() {
@@ -238,16 +238,14 @@ function startExportPreview() {
   expTimer = setInterval(() => { i = (i + 1) % expPhotos.length; $('expFrame').src = expPhotos[i].dataUrl; }, 1000 / expFps);
 }
 
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    if (window._gifLoaded) return res();
-    const s = document.createElement('script');
-    s.src = src; s.onload = () => { window._gifLoaded = true; res(); }; s.onerror = () => rej(new Error('load'));
-    document.head.appendChild(s);
-  });
-}
 async function loadImage(src) {
   return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+}
+let gifencMod = null;
+async function loadGifenc() {
+  if (gifencMod) return gifencMod;
+  gifencMod = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm');
+  return gifencMod;
 }
 
 async function makeGif() {
@@ -255,39 +253,47 @@ async function makeGif() {
   const btn = $('makeGifBtn');
   const res = $('gifResult');
   btn.disabled = true; btn.textContent = 'Bezig…';
-  res.innerHTML = '<p class="sub" style="text-align:center">GIF wordt gemaakt…</p>';
+  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">GIF wordt gemaakt…</p>';
   try {
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+    const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
     const first = await loadImage(expPhotos[0].dataUrl);
-    const W = 480, H = Math.round(W * first.height / first.width);
-    const gif = new GIF({ workers: 2, quality: 10, width: W, height: H,
-      workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js' });
+    const W = 480, H = Math.round(W * first.height / first.width) || 640;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const enc = GIFEncoder();
+    const delay = Math.round(1000 / expFps);
     for (const ph of expPhotos) {
       const im = await loadImage(ph.dataUrl);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
       ctx.drawImage(im, 0, 0, W, H);
-      gif.addFrame(ctx, { copy: true, delay: Math.round(1000 / expFps) });
+      const data = ctx.getImageData(0, 0, W, H).data;
+      const palette = quantize(data, 256);
+      const index = applyPalette(data, palette);
+      enc.writeFrame(index, W, H, { palette, delay });
     }
-    gif.on('finished', (blob) => {
-      const url = URL.createObjectURL(blob);
-      res.innerHTML = '<img src="' + url + '" alt="GIF" style="width:100%; max-width:300px; display:block; margin:0 auto 12px; border-radius:12px">';
-      const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
-      const a = document.createElement('a'); a.href = url; a.download = 'aligno.gif';
-      a.className = 'btn ghost flex'; a.textContent = 'Bewaren'; a.style.textDecoration = 'none';
-      row.appendChild(a);
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'aligno.gif', { type: 'image/gif' })] })) {
+    enc.finish();
+    const blob = new Blob([enc.bytes()], { type: 'image/gif' });
+    const url = URL.createObjectURL(blob);
+    res.innerHTML = '';
+    const img = new Image(); img.src = url; img.alt = 'GIF';
+    img.style.cssText = 'width:100%; max-width:280px; display:block; margin:0 auto 16px; border-radius:16px; box-shadow:var(--sh)';
+    res.appendChild(img);
+    const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
+    const a = document.createElement('a'); a.href = url; a.download = 'aligno.gif';
+    a.className = 'btn ghost flex'; a.textContent = 'Bewaren'; a.style.textDecoration = 'none';
+    row.appendChild(a);
+    try {
+      const file = new File([blob], 'aligno.gif', { type: 'image/gif' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
         const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Delen';
-        sh.onclick = () => navigator.share({ files: [new File([blob], 'aligno.gif', { type: 'image/gif' })], title: 'Aligno' });
+        sh.onclick = () => navigator.share({ files: [file], title: 'Aligno' }).catch(() => {});
         row.appendChild(sh);
       }
-      res.appendChild(row);
-      btn.disabled = false; btn.textContent = 'Opnieuw maken';
-    });
-    gif.render();
+    } catch (e) {}
+    res.appendChild(row);
+    btn.disabled = false; btn.textContent = 'Opnieuw maken';
   } catch (e) {
-    res.innerHTML = '<p class="note">GIF maken lukte niet. Controleer je internetverbinding en probeer opnieuw.</p>';
+    res.innerHTML = '<p class="note">GIF maken lukte niet (' + ((e && e.message) || 'onbekend') + '). Controleer je internetverbinding en probeer opnieuw.</p>';
     btn.disabled = false; btn.textContent = 'GIF maken';
   }
 }
@@ -297,7 +303,7 @@ function renderRemOpts() {
   $('remOpts').innerHTML = remOptions.map(o => {
     const on = o === state._rem;
     return '<div class="optrow' + (on ? ' on' : '') + '" data-rem="' + o + '"><span class="nm">' + o + '</span>' +
-      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
+      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#0C6B50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
   }).join('');
 }
 async function openReminders() {
