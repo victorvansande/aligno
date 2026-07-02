@@ -160,6 +160,35 @@
     animation:spin .7s linear infinite; margin:0 auto; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .icon{ width:22px; height:22px; }
+
+  :root{ --sh:0 1px 2px rgba(20,30,25,.04), 0 8px 24px rgba(20,30,25,.055); --r-card:22px; }
+  @keyframes screenIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes sheetUp{ from{ transform:translateY(100%); } to{ transform:none; } }
+  @keyframes badgePop{ from{ opacity:0; transform:translateX(-50%) translateY(-6px) scale(.92); } to{ opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
+  @keyframes listIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+  .screen.active{ animation:screenIn .28s cubic-bezier(.22,.61,.36,1); }
+  .cam.active{ animation:fadeIn .24s ease; }
+  .modal-bg.on{ animation:fadeIn .18s ease; }
+  .modal-bg.on .sheet{ animation:sheetUp .32s cubic-bezier(.22,.61,.36,1); }
+  .pcard{ animation:listIn .3s ease backwards; }
+  .ptile{ animation:listIn .3s ease backwards; }
+  .brand{ font-size:24px; }
+  .btn{ padding:16px; }
+  .btn.primary{ box-shadow:0 4px 16px rgba(18,162,119,.30); }
+  .btn.primary:active{ box-shadow:0 2px 8px rgba(18,162,119,.26); }
+  .pthumb{ border-radius:16px; }
+  .cthumb{ cursor:pointer; transition:transform .1s; }
+  .cthumb:active{ transform:scale(.92); }
+
+  .photoview{ position:fixed; inset:0; z-index:60; background:rgba(6,8,9,.97); display:none; align-items:center; justify-content:center; }
+  .photoview.on{ display:flex; animation:fadeIn .2s ease; }
+  .photoview img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .pv-close{ position:absolute; top:calc(env(safe-area-inset-top) + 16px); right:16px; width:44px; height:44px; border-radius:50%;
+    border:none; background:rgba(40,42,45,.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:#fff;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2; }
+  .pv-close:active{ transform:scale(.94); }
+  .pv-cap{ position:absolute; bottom:calc(env(safe-area-inset-bottom) + 22px); left:0; right:0; text-align:center; color:#fff; font-size:13px; opacity:.75; }
 </style>
 </head>
 <body>
@@ -308,6 +337,12 @@
       <button class="btn primary flex" id="newCreate">Aanmaken</button>
     </div>
   </div>
+</div>
+
+<div class="photoview" id="photoView">
+  <img id="photoViewImg" alt="Foto">
+  <div class="pv-cap" id="photoViewCap"></div>
+  <button class="pv-close" id="photoViewClose" aria-label="Sluiten"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
 </div>
 
 <script src="app.js"></script>

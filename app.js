@@ -71,13 +71,13 @@ async function renderHome() {
       '<p>Een project is één reeks foto’s van hetzelfde onderwerp doorheen de tijd.</p></div>';
     return;
   }
-  list.innerHTML = projects.map(p => {
+  list.innerHTML = projects.map((p, idx) => {
     const last = p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
     const thumb = last
       ? '<img class="pthumb" src="' + last.dataUrl + '" alt="">'
       : '<div class="pthumb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
     const n = p.photos ? p.photos.length : 0;
-    return '<div class="pcard" data-open="' + p.id + '">' + thumb +
+    return '<div class="pcard" data-open="' + p.id + '" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
       '<div class="mt">' + n + ' foto’s' + (last ? ' · ' + fmtAgo(last.ts) : '') + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>';
@@ -103,8 +103,9 @@ async function openProject(id) {
     empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Nog geen foto’s</h3><p>Neem je eerste foto om de reeks te starten.</p></div>';
   } else {
     empty.innerHTML = '';
+    projPhotos = photos;
     grid.innerHTML = photos.map((ph, i) =>
-      '<div class="ptile"><img src="' + ph.dataUrl + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
+      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + ph.dataUrl + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
     ).join('');
   }
   show('project');
@@ -283,10 +284,22 @@ async function capturePhoto() {
   const b = $('cbadge');
   b.textContent = 'Foto ' + p.photos.length + ' bewaard — nu uitgelijnd op deze';
   b.style.display = 'block';
+  b.style.animation = 'badgePop .3s ease';
   clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2200);
 }
 
-let expFps = 3, expTimer = null, expPhotos = [];
+let expFps = 3, expTimer = null, expPhotos = [], projPhotos = [];
+
+function fmtFullDate(ts) {
+  try { return new Date(ts).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+  catch (e) { return fmtDate(ts); }
+}
+function openPhotoView(src, cap) {
+  $('photoViewImg').src = src;
+  $('photoViewCap').textContent = cap || '';
+  $('photoView').classList.add('on');
+}
+function closePhotoView() { $('photoView').classList.remove('on'); }
 async function openExport() {
   const p = await dbGet(state.projectId);
   expPhotos = (p.photos || []);
@@ -410,6 +423,14 @@ function wire() {
   });
 
   $('camClose').addEventListener('click', () => { openProject(state.projectId); });
+  $('camLastThumb').addEventListener('click', () => { if (overlayRaw) openPhotoView(overlayRaw, 'Vorige foto'); });
+  $('photoViewClose').addEventListener('click', closePhotoView);
+  $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
+  $('photoGrid').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-i]'); if (!t) return;
+    const ph = projPhotos[+t.getAttribute('data-i')];
+    if (ph) openPhotoView(ph.dataUrl, fmtFullDate(ph.ts));
+  });
   $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
   $('camRetry').addEventListener('click', startCamera);
   $('gridBtn').addEventListener('click', () => { gridMode = (gridMode + 1) % 3; setGrid(); });
