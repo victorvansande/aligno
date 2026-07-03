@@ -233,6 +233,37 @@
   .set-row .ri{ color:var(--al-d); display:flex; }
   .set-row .rt{ flex:1; font-size:15px; }
   .set-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin-top:16px; line-height:1.7; }
+
+  #overlay.diff{ mix-blend-mode:difference; filter:none; }
+  .cam-seg button{ font-size:12.5px; padding-left:4px; padding-right:4px; }
+
+  .landing{ position:relative; overflow:hidden; }
+  .landing-deco{ position:absolute; top:50%; left:50%; width:min(112vw,440px); height:min(112vw,440px);
+    transform:translate(-50%,-50%) translateY(-96px); opacity:.07; pointer-events:none; z-index:0;
+    animation:decoIn 1.1s ease both; }
+  @keyframes decoIn{ from{ opacity:0; transform:translate(-50%,-50%) translateY(-96px) scale(.9); } to{ opacity:.07; transform:translate(-50%,-50%) translateY(-96px) scale(1); } }
+  .landing > *:not(.landing-deco){ position:relative; z-index:1; }
+
+  .sheet{ max-height:90vh; overflow-y:auto; }
+  .sheet-sub{ font-size:14px; color:var(--txt2); margin:0 0 16px; line-height:1.5; }
+  .examples{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+  .ex{ display:flex; align-items:center; gap:13px; width:100%; text-align:left; border:1px solid var(--line);
+    border-radius:15px; padding:10px 12px; background:#fff; cursor:pointer; transition:transform .1s, border-color .15s, background .15s; }
+  .ex:active{ transform:scale(.985); }
+  .ex.sel{ border-color:var(--al); background:var(--al-bg); }
+  .ex-strip{ display:flex; align-items:center; flex:none; }
+  .ex-fr{ width:34px; height:34px; border-radius:9px; overflow:hidden; display:inline-flex; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+  .ex-fr svg{ width:100%; height:100%; display:block; }
+  .ex-ar{ color:var(--txt3); margin:0 3px; font-size:15px; line-height:1; }
+  .ex-txt b{ font-size:14.5px; font-weight:600; display:block; }
+  .ex-txt span{ font-size:12.5px; color:var(--txt2); }
+  .tip{ display:flex; gap:9px; align-items:flex-start; font-size:12.5px; color:var(--al-d); background:var(--al-bg);
+    border-radius:13px; padding:12px; line-height:1.5; }
+  .tip svg{ flex:none; margin-top:1px; }
+  .empty-strip{ display:flex; align-items:center; justify-content:center; margin-bottom:20px; }
+  .empty-strip .ex-fr{ width:54px; height:54px; border-radius:13px; }
+  .empty-strip .ex-ar{ font-size:19px; margin:0 6px; }
+  .tbtn:active{ transform:scale(.9); }
 </style>
 </head>
 <body>
@@ -240,6 +271,7 @@
 
   <section class="screen active" id="screen-landing">
     <div class="landing">
+      <svg class="landing-deco" viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="46" fill="none" stroke="#12A277" stroke-width="1"/><circle cx="100" cy="100" r="70" fill="none" stroke="#12A277" stroke-width="1" stroke-dasharray="2 7"/><circle cx="100" cy="100" r="94" fill="none" stroke="#12A277" stroke-width="1" stroke-dasharray="2 10"/><path d="M100 40v-16M100 176v-16M40 100H24M176 100h-16" stroke="#12A277" stroke-width="1.4" stroke-linecap="round"/></svg>
       <div class="landing-logo">
         <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="#16B487" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="#12A277"/><path d="M24 20v8M20 24h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
       </div>
@@ -384,11 +416,12 @@
       <button class="ciconbtn glass" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
     </div>
     <div class="cbadge" id="cbadge"></div>
-    <div class="camhint glass" id="camhint">Take your first photo. It then appears as an overlay to align to.</div>
+    <div class="camhint glass" id="camhint">Take your first photo from a spot you can return to. Next time, the overlay helps you line it up.</div>
     <div class="cam-panel">
       <div class="cam-seg glass" id="modeSeg" style="display:none">
-        <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Transparent</button>
+        <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Fade</button>
         <button data-om="edges" id="omEdges"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges</button>
+        <button data-om="diff" id="omDiff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>Blend</button>
       </div>
       <div class="cam-slwrap glass" id="opRow" style="display:none">
         <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
@@ -421,7 +454,13 @@
   <div class="sheet">
     <div class="grab"></div>
     <h3>New project</h3>
+    <p class="sheet-sub">Track anything that changes over time. Tap an idea, or name your own.</p>
+    <div class="examples" id="exampleList"></div>
     <input class="field" id="projName" placeholder="e.g. Living room plant" autocomplete="off">
+    <div class="tip">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span>Take each photo from the same spot. The overlay lines the new shot up with the last one.</span>
+    </div>
     <div style="display:flex; gap:10px; margin-top:18px">
       <button class="btn ghost flex" id="newCancel">Cancel</button>
       <button class="btn primary flex" id="newCreate">Create</button>

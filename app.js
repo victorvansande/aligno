@@ -49,6 +49,39 @@ function fmtDate(ts) {
   return dt.getDate() + '/' + (dt.getMonth() + 1);
 }
 
+function plantIll(g) {
+  const sh = 6 + g * 22, top = 30 - sh, n = Math.max(1, Math.round(1 + g * 3));
+  let lv = '';
+  for (let i = 0; i < n; i++) {
+    const t = (i + 1) / (n + 1), ly = 29 - t * sh, s = i % 2 ? -1 : 1;
+    lv += '<ellipse cx="' + (20 + s * 4) + '" cy="' + ly + '" rx="' + (2.6 + g * 2) + '" ry="1.9" fill="#3FA873" transform="rotate(' + (s * 30) + ' ' + (20 + s * 4) + ' ' + ly + ')"/>';
+  }
+  return '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#E7F2EA"/><line x1="20" y1="30" x2="20" y2="' + top + '" stroke="#2E7D55" stroke-width="1.6" stroke-linecap="round"/>' + lv + '<path d="M15.5 30h9l-1 5.5h-7z" fill="#C5824F"/></svg>';
+}
+function personIll(g) {
+  const hd = 3 + g * 1.4, bh = 9 + g * 13, top = 31 - bh - hd;
+  return '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#FBEDF1"/><circle cx="20" cy="' + (top + hd) + '" r="' + hd + '" fill="#E58AA6"/><rect x="' + (20 - hd) + '" y="' + (top + hd * 2) + '" width="' + (hd * 2) + '" height="' + (31 - (top + hd * 2)) + '" rx="' + hd + '" fill="#E58AA6"/></svg>';
+}
+const B_LOT = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#EDEFF2"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><path d="M7 29q5-3 9 0M24 29q4-2 8 0" stroke="#B6A886" fill="none" stroke-width="1.1" stroke-linecap="round"/></svg>';
+const B_FND = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#EDEFF2"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><rect x="10" y="22" width="20" height="7.5" fill="none" stroke="#9AA0A6" stroke-width="1.7"/></svg>';
+const B_HSE = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#E7F0FB"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><rect x="10" y="19" width="20" height="11" fill="#F2EAD9" stroke="#B7996F" stroke-width="1"/><path d="M8 19l12-8 12 8z" fill="#C0573A"/><rect x="17.5" y="23.5" width="5" height="6.5" fill="#8A6A45"/></svg>';
+
+const EXAMPLES = [
+  { name: 'Living room plant', label: 'Plant', desc: 'seedling to full bloom', frames: [plantIll(0.18), plantIll(0.55), plantIll(1)] },
+  { name: 'House build', label: 'Building', desc: 'ground to finished home', frames: [B_LOT, B_FND, B_HSE] },
+  { name: 'Growing up', label: 'A child', desc: 'watch them grow', frames: [personIll(0.25), personIll(0.6), personIll(1)] }
+];
+function strip(frames) {
+  return frames.map((f, j) => (j ? '<span class="ex-ar">›</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
+}
+function renderExamples() {
+  const el = $('exampleList');
+  if (el) el.innerHTML = EXAMPLES.map(e =>
+    '<button class="ex" data-name="' + escapeHtml(e.name) + '"><span class="ex-strip">' + strip(e.frames) + '</span>' +
+    '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span></span></button>'
+  ).join('');
+}
+
 const state = { screen: 'home', projectId: null, overlayMode: 'photo' };
 
 const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings'];
@@ -66,9 +99,9 @@ async function renderHome() {
   const projects = (await dbAll()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!projects.length) {
     list.innerHTML = '<div class="empty">' +
-      '<div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></div>' +
+      '<div class="ex-strip empty-strip">' + strip([plantIll(0.2), plantIll(0.55), plantIll(1)]) + '</div>' +
       '<h3>Start your first project</h3>' +
-      '<p>A project is one series of photos of the same subject over time.</p></div>';
+      '<p>Track anything over time — a plant, a build, a face. Line up each new photo with the last, and watch it change.</p></div>';
     return;
   }
   list.innerHTML = projects.map((p, idx) => {
@@ -116,7 +149,7 @@ function renderProjectHero(photos) {
   const hero = $('projHero');
   if (!photos || photos.length < 2) { hero.innerHTML = ''; return; }
   const first = photos[0], last = photos[photos.length - 1];
-  const days = Math.max(0, Math.round((last.ts - first.ts) / 86400000));
+  const days = Math.max(1, Math.round((last.ts - first.ts) / 86400000));
   hero.innerHTML =
     '<div class="hero"><div class="hero-row">' +
     '<figure class="hero-fig"><img src="' + first.dataUrl + '" alt=""><figcaption>First</figcaption></figure>' +
@@ -133,8 +166,8 @@ let newProjectAfterCreate = false;
 function openNewProjectModal(thenCamera) {
   newProjectAfterCreate = !!thenCamera;
   $('projName').value = '';
+  $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
   $('newModal').classList.add('on');
-  setTimeout(() => $('projName').focus(), 50);
 }
 function closeNewProjectModal() { $('newModal').classList.remove('on'); }
 async function createProject() {
@@ -228,6 +261,7 @@ function computeEdges(dataUrl) {
 function syncModeSeg() {
   $('omPhoto').classList.toggle('on', state.overlayMode === 'photo');
   $('omEdges').classList.toggle('on', state.overlayMode === 'edges');
+  $('omDiff').classList.toggle('on', state.overlayMode === 'diff');
 }
 function hideOverlay() {
   overlayRaw = null; overlayEdge = null; camHasOverlay = false;
@@ -247,6 +281,7 @@ async function applyOverlay() {
   const ov = $('overlay');
   if (!overlayRaw) return;
   ov.style.opacity = $('op').value / 100;
+  ov.classList.toggle('diff', state.overlayMode === 'diff');
   if (state.overlayMode === 'edges') {
     if (!overlayEdge) {
       $('omEdges').textContent = 'Working…';
@@ -331,12 +366,15 @@ async function capturePhoto() {
   await dbPut(p);
 
   setOverlay(url);
+  camBadge('Photo ' + p.photos.length + ' saved — now aligned to this');
+}
 
+function camBadge(text) {
   const b = $('cbadge');
-  b.textContent = 'Photo ' + p.photos.length + ' saved — now aligned to this';
+  b.textContent = text;
   b.style.display = 'block';
   b.style.animation = 'badgePop .3s ease';
-  clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2200);
+  clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2400);
 }
 
 let expFps = 3, expTimer = null, expPhotos = [], projPhotos = [];
@@ -468,6 +506,13 @@ function wire() {
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
   $('newCancel').addEventListener('click', closeNewProjectModal);
   $('newCreate').addEventListener('click', createProject);
+  renderExamples();
+  $('exampleList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-name]'); if (!b) return;
+    $('projName').value = b.getAttribute('data-name');
+    $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+  });
   $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
   $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
 
@@ -502,6 +547,7 @@ function wire() {
   $('modeSeg').addEventListener('click', (e) => {
     const b = e.target.closest('[data-om]'); if (!b) return;
     state.overlayMode = b.getAttribute('data-om');
+    if (state.overlayMode === 'diff') { $('op').value = 100; $('opv').textContent = '100%'; camBadge('Line it up until the screen goes dark'); }
     syncModeSeg(); applyOverlay();
   });
   $('shot').addEventListener('click', capturePhoto);
