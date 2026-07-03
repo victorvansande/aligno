@@ -95,6 +95,7 @@ async function openProject(id) {
   if (!p) { show('home'); renderHome(); return; }
   $('projTitle').textContent = p.name;
   const photos = p.photos || [];
+  projPhotos = photos;
   $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
   renderProjectHero(photos);
   const grid = $('photoGrid');
@@ -104,7 +105,6 @@ async function openProject(id) {
     empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo to start the series.</p></div>';
   } else {
     empty.innerHTML = '';
-    projPhotos = photos;
     grid.innerHTML = photos.map((ph, i) =>
       '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + ph.dataUrl + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
     ).join('');
@@ -292,11 +292,12 @@ async function startCamera() {
     err.classList.add('on'); return;
   }
   try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = await navigator.mediaDevices.getUserMedia({
+    const newStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1440 } },
       audio: false
     });
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = newStream;
     $('video').srcObject = stream;
     await $('video').play();
     err.classList.remove('on');
@@ -323,6 +324,7 @@ async function capturePhoto() {
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
 
   const p = await dbGet(state.projectId);
+  if (!p) return;
   p.photos = p.photos || [];
   p.photos.push({ id: uid(), dataUrl: url, ts: Date.now() });
   p.updatedAt = Date.now();
@@ -486,7 +488,7 @@ function wire() {
   });
 
   $('camClose').addEventListener('click', () => { openProject(state.projectId); });
-  $('camLastThumb').addEventListener('click', () => { if (overlayRaw) openPhotoView(overlayRaw, 'Previous photo'); });
+  $('camLastThumb').addEventListener('click', () => { if (state.projectId) openProject(state.projectId); });
   $('photoViewClose').addEventListener('click', closePhotoView);
   $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
   $('photoGrid').addEventListener('click', (e) => {
