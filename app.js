@@ -37,12 +37,12 @@ const $ = (id) => document.getElementById(id);
 function fmtAgo(ts) {
   if (!ts) return '';
   const d = Math.floor((Date.now() - ts) / 86400000);
-  if (d <= 0) return 'vandaag';
-  if (d === 1) return 'gisteren';
-  if (d < 7) return d + ' dagen geleden';
-  if (d < 14) return '1 week geleden';
-  if (d < 60) return Math.floor(d / 7) + ' weken geleden';
-  return Math.floor(d / 30) + ' maanden geleden';
+  if (d <= 0) return 'today';
+  if (d === 1) return 'yesterday';
+  if (d < 7) return d + ' days ago';
+  if (d < 14) return '1 week ago';
+  if (d < 60) return Math.floor(d / 7) + ' weeks ago';
+  return Math.floor(d / 30) + ' months ago';
 }
 function fmtDate(ts) {
   const dt = new Date(ts);
@@ -67,8 +67,8 @@ async function renderHome() {
   if (!projects.length) {
     list.innerHTML = '<div class="empty">' +
       '<div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></div>' +
-      '<h3>Start je eerste project</h3>' +
-      '<p>Een project is één reeks foto’s van hetzelfde onderwerp doorheen de tijd.</p></div>';
+      '<h3>Start your first project</h3>' +
+      '<p>A project is one series of photos of the same subject over time.</p></div>';
     return;
   }
   list.innerHTML = projects.map((p, idx) => {
@@ -79,7 +79,7 @@ async function renderHome() {
     const n = p.photos ? p.photos.length : 0;
     return '<div class="pcard" data-open="' + p.id + '" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
-      '<div class="mt">' + n + ' foto’s' + (last ? ' · ' + fmtAgo(last.ts) : '') + '</div></div>' +
+      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>';
   }).join('');
   list.querySelectorAll('[data-open]').forEach(el => {
@@ -95,12 +95,12 @@ async function openProject(id) {
   if (!p) { show('home'); renderHome(); return; }
   $('projTitle').textContent = p.name;
   const photos = p.photos || [];
-  $('projMeta').textContent = photos.length + ' foto’s · chronologisch';
+  $('projMeta').textContent = photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological';
   const grid = $('photoGrid');
   const empty = $('projEmpty');
   if (!photos.length) {
     grid.innerHTML = '';
-    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Nog geen foto’s</h3><p>Neem je eerste foto om de reeks te starten.</p></div>';
+    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo to start the series.</p></div>';
   } else {
     empty.innerHTML = '';
     projPhotos = photos;
@@ -120,8 +120,8 @@ function openNewProjectModal(thenCamera) {
 }
 function closeNewProjectModal() { $('newModal').classList.remove('on'); }
 async function createProject() {
-  const name = $('projName').value.trim() || 'Naamloos project';
-  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), photos: [], reminder: 'uit' };
+  const name = $('projName').value.trim() || 'Untitled project';
+  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), photos: [], reminder: 'off' };
   await dbPut(p);
   closeNewProjectModal();
   state.projectId = p.id;
@@ -131,7 +131,7 @@ async function createProject() {
 
 async function deleteCurrentProject() {
   if (!state.projectId) return;
-  if (!confirm('Dit project en alle foto’s verwijderen?')) return;
+  if (!confirm('Delete this project and all its photos?')) return;
   await dbDel(state.projectId);
   state.projectId = null;
   show('home');
@@ -221,10 +221,10 @@ async function applyOverlay() {
   ov.style.opacity = $('op').value / 100;
   if (state.overlayMode === 'edges') {
     if (!overlayEdge) {
-      $('omEdges').textContent = 'Bezig…';
+      $('omEdges').textContent = 'Working…';
       try { overlayEdge = await computeEdges(overlayRaw); }
       catch (e) { overlayEdge = overlayRaw; }
-      $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Randen';
+      $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges';
       if (state.overlayMode !== 'edges') return;
     }
     ov.src = overlayEdge; ov.classList.add('edges');
@@ -235,7 +235,7 @@ async function applyOverlay() {
 
 async function openCamera() {
   const p = await dbGet(state.projectId);
-  $('camProjName').textContent = p ? p.name : 'Uitlijnen';
+  $('camProjName').textContent = p ? p.name : 'Align';
   const last = p && p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
   syncModeSeg();
   if (last) setOverlay(last.dataUrl); else hideOverlay();
@@ -246,7 +246,7 @@ async function openCamera() {
 function setGrid() {
   const g = $('gridlines'), btn = $('gridBtn'), lbl = $('gridLbl');
   g.innerHTML = '';
-  if (gridMode === 0) { g.classList.remove('on'); btn.classList.remove('act'); lbl.textContent = 'Raster'; return; }
+  if (gridMode === 0) { g.classList.remove('on'); btn.classList.remove('act'); lbl.textContent = 'Grid'; return; }
   g.classList.add('on'); btn.classList.add('act');
   const fracs = gridMode === 1 ? [33.333, 66.667] : [25, 50, 75];
   fracs.forEach(p => {
@@ -254,13 +254,13 @@ function setGrid() {
     const h = document.createElement('div'); h.className = 'gline h'; h.style.top = p + '%'; g.appendChild(h);
   });
   g.appendChild(Object.assign(document.createElement('div'), { className: 'gcross' }));
-  lbl.textContent = gridMode === 1 ? 'Derden' : 'Fijn';
+  lbl.textContent = gridMode === 1 ? 'Thirds' : 'Fine';
 }
 
 async function startCamera() {
   const err = $('camerr');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    $('camerrMsg').textContent = 'De camera werkt alleen via een beveiligde https-link. Open de app via de gedeelde link.';
+    $('camerrMsg').textContent = 'The camera only works over a secure https link. Open the app via the shared link.';
     err.classList.add('on'); return;
   }
   try {
@@ -275,9 +275,9 @@ async function startCamera() {
   } catch (e) {
     const n = e && e.name;
     $('camerrMsg').textContent = (n === 'NotAllowedError' || n === 'SecurityError')
-      ? 'Geef de browser toestemming voor de camera en probeer opnieuw.'
-      : (n === 'NotFoundError') ? 'Geen bruikbare camera gevonden, of die is in gebruik door een andere app.'
-      : (e && e.message) || 'Onbekende fout.';
+      ? 'Allow camera access in your browser and try again.'
+      : (n === 'NotFoundError') ? 'No usable camera found, or it is in use by another app.'
+      : (e && e.message) || 'Unknown error.';
     err.classList.add('on');
   }
 }
@@ -303,7 +303,7 @@ async function capturePhoto() {
   setOverlay(url);
 
   const b = $('cbadge');
-  b.textContent = 'Foto ' + p.photos.length + ' bewaard — nu uitgelijnd op deze';
+  b.textContent = 'Photo ' + p.photos.length + ' saved — now aligned to this';
   b.style.display = 'block';
   b.style.animation = 'badgePop .3s ease';
   clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2200);
@@ -312,7 +312,7 @@ async function capturePhoto() {
 let expFps = 3, expTimer = null, expPhotos = [], projPhotos = [];
 
 function fmtFullDate(ts) {
-  try { return new Date(ts).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+  try { return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
   catch (e) { return fmtDate(ts); }
 }
 function openPhotoView(src, cap) {
@@ -324,7 +324,7 @@ function closePhotoView() { $('photoView').classList.remove('on'); }
 async function openExport() {
   const p = await dbGet(state.projectId);
   expPhotos = (p.photos || []);
-  $('expCount').textContent = expPhotos.length + ' foto’s · voorbeeld';
+  $('expCount').textContent = expPhotos.length + (expPhotos.length === 1 ? ' photo' : ' photos') + ' · preview';
   $('gifResult').innerHTML = '';
   show('export');
   startExportPreview();
@@ -350,8 +350,8 @@ async function makeGif() {
   if (!expPhotos.length) return;
   const btn = $('makeGifBtn');
   const res = $('gifResult');
-  btn.disabled = true; btn.textContent = 'Bezig…';
-  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">GIF wordt gemaakt…</p>';
+  btn.disabled = true; btn.textContent = 'Working…';
+  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIF…</p>';
   try {
     const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
     const first = await loadImage(expPhotos[0].dataUrl);
@@ -378,25 +378,25 @@ async function makeGif() {
     res.appendChild(img);
     const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
     const a = document.createElement('a'); a.href = url; a.download = 'aligno.gif';
-    a.className = 'btn ghost flex'; a.textContent = 'Bewaren'; a.style.textDecoration = 'none';
+    a.className = 'btn ghost flex'; a.textContent = 'Save'; a.style.textDecoration = 'none';
     row.appendChild(a);
     try {
       const file = new File([blob], 'aligno.gif', { type: 'image/gif' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Delen';
+        const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Share';
         sh.onclick = () => navigator.share({ files: [file], title: 'Aligno' }).catch(() => {});
         row.appendChild(sh);
       }
     } catch (e) {}
     res.appendChild(row);
-    btn.disabled = false; btn.textContent = 'Opnieuw maken';
+    btn.disabled = false; btn.textContent = 'Make again';
   } catch (e) {
-    res.innerHTML = '<p class="note">GIF maken lukte niet (' + ((e && e.message) || 'onbekend') + '). Controleer je internetverbinding en probeer opnieuw.</p>';
-    btn.disabled = false; btn.textContent = 'GIF maken';
+    res.innerHTML = '<p class="note">Couldn’t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
+    btn.disabled = false; btn.textContent = 'Make GIF';
   }
 }
 
-const remOptions = ['Uit', 'Dagelijks', 'Wekelijks', 'Maandelijks'];
+const remOptions = ['Off', 'Daily', 'Weekly', 'Monthly'];
 function renderRemOpts() {
   $('remOpts').innerHTML = remOptions.map(o => {
     const on = o === state._rem;
@@ -406,17 +406,17 @@ function renderRemOpts() {
 }
 async function openReminders() {
   const p = await dbGet(state.projectId);
-  const cur = (p && p.reminder) ? p.reminder : 'Uit';
-  state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Uit';
+  const cur = (p && p.reminder) ? p.reminder : 'Off';
+  state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Off';
   renderRemOpts();
-  $('remNote').textContent = 'In deze webversie krijg je een melding zolang de app op de achtergrond actief is. Volledig betrouwbare herinneringen op een vast tijdstip komen in de native app-versie.';
+  $('remNote').textContent = 'In this web version you get a notification while the app is active in the background. Fully reliable reminders at a fixed time will come in the native app version.';
   show('reminders');
 }
 async function saveReminder() {
   const p = await dbGet(state.projectId);
-  p.reminder = state._rem || 'Uit';
+  p.reminder = state._rem || 'Off';
   await dbPut(p);
-  if (p.reminder !== 'Uit' && 'Notification' in window && Notification.permission === 'default') {
+  if (p.reminder !== 'Off' && 'Notification' in window && Notification.permission === 'default') {
     try { await Notification.requestPermission(); } catch (e) {}
   }
   openProject(state.projectId);
@@ -445,7 +445,7 @@ function wire() {
   });
 
   $('camClose').addEventListener('click', () => { openProject(state.projectId); });
-  $('camLastThumb').addEventListener('click', () => { if (overlayRaw) openPhotoView(overlayRaw, 'Vorige foto'); });
+  $('camLastThumb').addEventListener('click', () => { if (overlayRaw) openPhotoView(overlayRaw, 'Previous photo'); });
   $('photoViewClose').addEventListener('click', closePhotoView);
   $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
   $('photoGrid').addEventListener('click', (e) => {
@@ -488,6 +488,6 @@ function wire() {
     if (seen) show('home');
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   } catch (e) {
-    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Kon de app niet starten: ' + (e && e.message) + '</div>';
+    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
   }
 })();

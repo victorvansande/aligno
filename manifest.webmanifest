@@ -1,7 +1,7 @@
 {
   "name": "Aligno",
   "short_name": "Aligno",
-  "description": "Leg verandering vast vanuit exact hetzelfde beeld.",
+  "description": "Capture change from the exact same view.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
