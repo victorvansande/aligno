@@ -51,7 +51,7 @@ function fmtDate(ts) {
 
 const state = { screen: 'home', projectId: null, overlayMode: 'photo' };
 
-const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders'];
+const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings'];
 function show(name) {
   if (state.screen === 'camera' && name !== 'camera') stopCamera();
   screens.forEach(s => {
@@ -95,7 +95,8 @@ async function openProject(id) {
   if (!p) { show('home'); renderHome(); return; }
   $('projTitle').textContent = p.name;
   const photos = p.photos || [];
-  $('projMeta').textContent = photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological';
+  $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
+  renderProjectHero(photos);
   const grid = $('photoGrid');
   const empty = $('projEmpty');
   if (!photos.length) {
@@ -109,6 +110,23 @@ async function openProject(id) {
     ).join('');
   }
   show('project');
+}
+
+function renderProjectHero(photos) {
+  const hero = $('projHero');
+  if (!photos || photos.length < 2) { hero.innerHTML = ''; return; }
+  const first = photos[0], last = photos[photos.length - 1];
+  const days = Math.max(0, Math.round((last.ts - first.ts) / 86400000));
+  hero.innerHTML =
+    '<div class="hero"><div class="hero-row">' +
+    '<figure class="hero-fig"><img src="' + first.dataUrl + '" alt=""><figcaption>First</figcaption></figure>' +
+    '<div class="hero-ar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>' +
+    '<figure class="hero-fig"><img src="' + last.dataUrl + '" alt=""><figcaption>Latest</figcaption></figure>' +
+    '</div><div class="hero-stats">' +
+    '<div class="stat"><b>' + photos.length + '</b><span>photos</span></div>' +
+    '<div class="stat"><b>' + days + '</b><span>' + (days === 1 ? 'day' : 'days') + '</span></div>' +
+    '<div class="stat"><b>' + fmtDate(last.ts) + '</b><span>latest</span></div>' +
+    '</div></div>';
 }
 
 let newProjectAfterCreate = false;
@@ -168,9 +186,8 @@ function computeEdges(dataUrl) {
             ang[i] = a < 22.5 || a >= 157.5 ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
           }
         }
-        const out = ctx.createImageData(w, h);
-        const o = out.data;
-        const lo = 55, hi = 190, ER = 255, EG = 46, EB = 154;
+        const ea = new Uint8ClampedArray(w * h);
+        const lo = 50, hi = 175, ER = 255, EG = 46, EB = 154;
         for (let y = 1; y < h - 1; y++) {
           for (let x = 1; x < w - 1; x++) {
             const i = y * w + x;
@@ -183,9 +200,20 @@ function computeEdges(dataUrl) {
             else if (d === 2) { n1 = mag[i - w]; n2 = mag[i + w]; }
             else { n1 = mag[i - w - 1]; n2 = mag[i + w + 1]; }
             if (m < n1 || m < n2) continue;
+            ea[i] = m >= hi ? 255 : Math.round((m - lo) / (hi - lo) * 255);
+          }
+        }
+        const out = ctx.createImageData(w, h);
+        const o = out.data;
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x;
+            let a = ea[i];
+            const nb = Math.max(ea[i - 1], ea[i + 1], ea[i - w], ea[i + w]);
+            if (nb * 0.85 > a) a = nb * 0.85;
+            if (!a) continue;
             const p = i * 4;
-            o[p] = ER; o[p + 1] = EG; o[p + 2] = EB;
-            o[p + 3] = m >= hi ? 255 : Math.round((m - lo) / (hi - lo) * 255);
+            o[p] = ER; o[p + 1] = EG; o[p + 2] = EB; o[p + 3] = a;
           }
         }
         ctx.putImageData(out, 0, 0);
@@ -422,6 +450,17 @@ async function saveReminder() {
   openProject(state.projectId);
 }
 
+function statCard(v, l) { return '<div class="stat-card"><b>' + v + '</b><span>' + l + '</span></div>'; }
+async function openSettings() {
+  const projects = await dbAll();
+  let photos = 0, bytes = 0;
+  projects.forEach(p => (p.photos || []).forEach(ph => { photos++; bytes += Math.round((ph.dataUrl ? ph.dataUrl.length : 0) * 0.73); }));
+  const mb = bytes / 1048576;
+  const mbLabel = mb >= 10 ? Math.round(mb) : mb.toFixed(1);
+  $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(photos, 'photos') + statCard(mbLabel, 'MB used');
+  show('settings');
+}
+
 function wire() {
   $('startBtn').addEventListener('click', () => { try { localStorage.setItem('aligno_seen', '1'); } catch (e) {} show('home'); });
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
@@ -435,6 +474,8 @@ function wire() {
   $('newPhotoBtn').addEventListener('click', openCamera);
   $('exportBtn').addEventListener('click', openExport);
   $('reminderBtn').addEventListener('click', openReminders);
+  $('settingsBtn').addEventListener('click', openSettings);
+  $('introRow').addEventListener('click', () => { try { localStorage.removeItem('aligno_seen'); } catch (e) {} show('landing'); });
 
   $('exportBack').addEventListener('click', () => { clearInterval(expTimer); openProject(state.projectId); });
   $('remBack').addEventListener('click', () => openProject(state.projectId));

@@ -203,6 +203,36 @@
   .feat b{ font-size:15px; font-weight:600; display:block; letter-spacing:-.01em; }
   .feat span{ font-size:13px; color:var(--txt2); }
   .landing-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin:12px 0 0; }
+
+  .empty p{ max-width:280px; margin-left:auto; margin-right:auto; }
+  .hero{ background:#F4F5F3; border-radius:18px; padding:14px; margin-bottom:20px; animation:listIn .3s ease; }
+  .hero-row{ display:flex; align-items:center; gap:10px; }
+  .hero-fig{ margin:0; flex:1; min-width:0; }
+  .hero-fig img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:12px; display:block; }
+  .hero-fig figcaption{ font-size:11px; color:var(--txt2); text-align:center; margin-top:7px; font-weight:500; }
+  .hero-ar{ color:var(--al); flex:none; display:flex; }
+  .hero-stats{ display:flex; margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
+  .hero-stats .stat{ flex:1; text-align:center; }
+  .hero-stats .stat + .stat{ border-left:1px solid var(--line); }
+  .hero-stats .stat b{ display:block; font-size:17px; font-weight:600; letter-spacing:-.02em; }
+  .hero-stats .stat span{ font-size:11px; color:var(--txt2); }
+
+  .set-card{ background:#F4F5F3; border-radius:16px; padding:16px; margin-bottom:22px; display:flex; flex-direction:column; gap:16px; }
+  .set-step{ display:flex; gap:13px; align-items:flex-start; }
+  .set-step .num{ width:27px; height:27px; border-radius:50%; background:var(--al); color:#fff; font-size:13px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; flex:none; }
+  .set-step b{ font-size:14.5px; font-weight:600; display:block; }
+  .set-step span{ font-size:13px; color:var(--txt2); line-height:1.4; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .stat-card{ background:#F4F5F3; border-radius:14px; padding:15px 8px; text-align:center; }
+  .stat-card b{ display:block; font-size:21px; font-weight:600; letter-spacing:-.02em; }
+  .stat-card span{ font-size:11px; color:var(--txt2); }
+  .set-row{ display:flex; align-items:center; gap:12px; padding:15px 14px; border:1px solid var(--line); border-radius:14px;
+    margin-bottom:10px; cursor:pointer; background:#fff; }
+  .set-row:active{ background:#fafafa; }
+  .set-row .ri{ color:var(--al-d); display:flex; }
+  .set-row .rt{ flex:1; font-size:15px; }
+  .set-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin-top:16px; line-height:1.7; }
 </style>
 </head>
 <body>
@@ -236,6 +266,9 @@
       <button class="tbtn" id="installBtn" style="display:none" aria-label="Install app">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
       </button>
+      <button class="tbtn" id="settingsBtn" aria-label="Settings">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
     </div>
     <div class="content">
       <p class="sub">Capture change from the exact same view.</p>
@@ -257,6 +290,7 @@
       <button class="tbtn" id="delProjectBtn" aria-label="Delete project"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
     </div>
     <div class="content">
+      <div id="projHero"></div>
       <p class="sectlbl" id="projMeta"></p>
       <div class="grid3" id="photoGrid"></div>
       <div id="projEmpty"></div>
@@ -313,6 +347,29 @@
     </div>
     <div class="footer">
       <button class="btn primary block" id="remSave">Save</button>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-settings">
+    <div class="topbar">
+      <button class="backbtn" data-nav="home" aria-label="Back"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="ttl">Settings</span>
+    </div>
+    <div class="content">
+      <p class="sectlbl">How it works</p>
+      <div class="set-card">
+        <div class="set-step"><span class="num">1</span><div><b>Create a project</b><span>One subject you want to track over time.</span></div></div>
+        <div class="set-step"><span class="num">2</span><div><b>Overlay &amp; align</b><span>Line up the live view with your previous photo.</span></div></div>
+        <div class="set-step"><span class="num">3</span><div><b>Export</b><span>Turn the series into a GIF to share.</span></div></div>
+      </div>
+      <p class="sectlbl">Your library</p>
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="set-row" id="introRow">
+        <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
+        <span class="rt">Show intro again</span>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <p class="set-foot">Aligno · web preview<br>No account · everything stays on your device</p>
     </div>
   </section>
 
