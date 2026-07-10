@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v10';
+const CACHE = 'aligno-v11';
 const ASSETS = [
   './',
   './index.html',

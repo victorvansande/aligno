@@ -1,34 +1,79 @@
 'use strict';
 
+const APP_VERSION = 'v11';
 const DB_NAME = 'aligno';
-const STORE = 'projects';
 let db = null;
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       const d = req.result;
-      if (!d.objectStoreNames.contains(STORE)) {
-        d.createObjectStore(STORE, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('photos')) {
+        const s = d.createObjectStore('photos', { keyPath: 'id' });
+        s.createIndex('byProject', 'projectId');
       }
     };
     req.onsuccess = () => { db = req.result; resolve(db); };
     req.onerror = () => reject(req.error);
   });
 }
-function tx(mode) { return db.transaction(STORE, mode).objectStore(STORE); }
-function dbAll() {
-  return new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+function store(name, mode) { return db.transaction(name, mode).objectStore(name); }
+function reqP(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+
+const dbProjects = () => reqP(store('projects', 'readonly').getAll());
+const dbGetProject = (id) => reqP(store('projects', 'readonly').get(id));
+const dbPutProject = (p) => reqP(store('projects', 'readwrite').put(p));
+const dbDelProject = (id) => reqP(store('projects', 'readwrite').delete(id));
+const dbAddPhoto = (ph) => reqP(store('photos', 'readwrite').put(ph));
+const dbDelPhoto = (id) => reqP(store('photos', 'readwrite').delete(id));
+const dbPhotoCount = (pid) => reqP(store('photos', 'readonly').index('byProject').count(IDBKeyRange.only(pid)));
+
+async function photosOf(p) {
+  const rows = await reqP(store('photos', 'readonly').index('byProject').getAll(IDBKeyRange.only(p.id)));
+  const leftovers = (p.photos || []).map(ph => ({ id: ph.id, projectId: p.id, ts: ph.ts, dataUrl: ph.dataUrl }));
+  return rows.concat(leftovers).sort((a, b) => (a.ts || 0) - (b.ts || 0));
 }
-function dbGet(id) {
-  return new Promise((res, rej) => { const r = tx('readonly').get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+
+function dataUrlToBlob(u) {
+  const i = u.indexOf(',');
+  const mime = ((u.slice(0, i).match(/data:([^;]+)/) || [])[1]) || 'image/jpeg';
+  const bin = atob(u.slice(i + 1));
+  const arr = new Uint8Array(bin.length);
+  for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+  return new Blob([arr], { type: mime });
 }
-function dbPut(p) {
-  return new Promise((res, rej) => { const r = tx('readwrite').put(p); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+
+async function migrate() {
+  const projects = await dbProjects();
+  for (const p of projects) {
+    if (!p.photos || !p.photos.length) continue;
+    const remaining = [];
+    for (const ph of p.photos) {
+      try {
+        const blob = dataUrlToBlob(ph.dataUrl);
+        await dbAddPhoto({ id: ph.id || uid(), projectId: p.id, ts: ph.ts || Date.now(), blob });
+      } catch (e) { remaining.push(ph); }
+    }
+    if (remaining.length) p.photos = remaining; else delete p.photos;
+    try { await dbPutProject(p); } catch (e) {}
+  }
 }
-function dbDel(id) {
-  return new Promise((res, rej) => { const r = tx('readwrite').delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+
+const urlCache = new Map();
+function urlFor(ph, kind) {
+  if (ph.dataUrl) return ph.dataUrl;
+  const useThumb = kind === 'thumb' && ph.thumb;
+  const key = ph.id + (useThumb ? ':t' : ':f');
+  if (!urlCache.has(key)) urlCache.set(key, URL.createObjectURL(useThumb ? ph.thumb : ph.blob));
+  return urlCache.get(key);
+}
+function dropUrls(id) {
+  [':t', ':f'].forEach(s => {
+    const k = id + s;
+    if (urlCache.has(k)) { try { URL.revokeObjectURL(urlCache.get(k)); } catch (e) {} urlCache.delete(k); }
+  });
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -48,6 +93,11 @@ function fmtDate(ts) {
   const dt = new Date(ts);
   return dt.getDate() + '/' + (dt.getMonth() + 1);
 }
+function fmtFullDate(ts) {
+  try { return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+  catch (e) { return fmtDate(ts); }
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 function plantIll(g) {
   const sh = 6 + g * 22, top = 30 - sh, n = Math.max(1, Math.round(1 + g * 3));
@@ -82,7 +132,12 @@ function renderExamples() {
   ).join('');
 }
 
-const state = { screen: 'home', projectId: null, overlayMode: 'photo' };
+const state = { screen: 'landing', projectId: null, overlayMode: 'photo' };
+
+function setTheme(dark) {
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', dark ? '#0d0f12' : '#ffffff');
+}
 
 const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings'];
 function show(name) {
@@ -92,43 +147,68 @@ function show(name) {
     if (el) el.classList.toggle('active', s === name);
   });
   state.screen = name;
+  setTheme(name === 'camera');
+}
+
+function reminderInterval(p) {
+  return { daily: 1, weekly: 7, monthly: 30 }[String((p && p.reminder) || '').toLowerCase()] || 0;
+}
+function isDue(p, last) {
+  const iv = reminderInterval(p);
+  if (!iv) return false;
+  if (!last) return true;
+  return (Date.now() - last.ts) / 86400000 >= iv;
 }
 
 async function renderHome() {
   const list = $('projectList');
-  const projects = (await dbAll()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const projects = (await dbProjects()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!projects.length) {
     list.innerHTML = '<div class="empty">' +
-      '<div class="ex-strip empty-strip">' + strip([plantIll(0.2), plantIll(0.55), plantIll(1)]) + '</div>' +
+      '<div class="empty-strip">' + strip([plantIll(0.18), plantIll(0.55), plantIll(1)]) + '</div>' +
       '<h3>Start your first project</h3>' +
-      '<p>Track anything over time — a plant, a build, a face. Line up each new photo with the last, and watch it change.</p></div>';
+      '<p>One series of photos of the same subject, taken over time.</p></div>';
     return;
   }
-  list.innerHTML = projects.map((p, idx) => {
-    const last = p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
+  const cards = await Promise.all(projects.map(async (p, idx) => {
+    const photos = await photosOf(p);
+    const last = photos.length ? photos[photos.length - 1] : null;
     const thumb = last
-      ? '<img class="pthumb" src="' + last.dataUrl + '" alt="">'
+      ? '<img class="pthumb" src="' + urlFor(last, 'thumb') + '" alt="">'
       : '<div class="pthumb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
-    const n = p.photos ? p.photos.length : 0;
+    const n = photos.length;
+    const due = isDue(p, last) ? '<span class="duechip">Due</span>' : '';
     return '<div class="pcard" data-open="' + p.id + '" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
-      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + '</div></div>' +
+      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>';
-  }).join('');
+  }));
+  list.innerHTML = cards.join('');
   list.querySelectorAll('[data-open]').forEach(el => {
     el.addEventListener('click', () => openProject(el.getAttribute('data-open')));
   });
 }
 
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let projPhotos = [];
 
 async function openProject(id) {
   state.projectId = id;
-  const p = await dbGet(id);
+  const p = await dbGetProject(id);
   if (!p) { show('home'); renderHome(); return; }
   $('projTitle').textContent = p.name;
-  const photos = p.photos || [];
+  const photos = await photosOf(p);
   projPhotos = photos;
+  const last = photos.length ? photos[photos.length - 1] : null;
+
+  $('dueBanner').innerHTML = isDue(p, last)
+    ? '<div class="due-banner" id="dueGo">' +
+      '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
+      '<span><b>Photo due.</b> Keep the series going — take the next shot.</span>' +
+      '<span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>'
+    : '';
+  const dueGo = $('dueGo');
+  if (dueGo) dueGo.addEventListener('click', openCamera);
+
   $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
   renderProjectHero(photos);
   const grid = $('photoGrid');
@@ -139,7 +219,7 @@ async function openProject(id) {
   } else {
     empty.innerHTML = '';
     grid.innerHTML = photos.map((ph, i) =>
-      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + ph.dataUrl + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
+      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + urlFor(ph, 'thumb') + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
     ).join('');
   }
   show('project');
@@ -152,9 +232,9 @@ function renderProjectHero(photos) {
   const days = Math.max(1, Math.round((last.ts - first.ts) / 86400000));
   hero.innerHTML =
     '<div class="hero"><div class="hero-row">' +
-    '<figure class="hero-fig"><img src="' + first.dataUrl + '" alt=""><figcaption>First</figcaption></figure>' +
+    '<figure class="hero-fig"><img src="' + urlFor(first, 'thumb') + '" alt=""><figcaption>First</figcaption></figure>' +
     '<div class="hero-ar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>' +
-    '<figure class="hero-fig"><img src="' + last.dataUrl + '" alt=""><figcaption>Latest</figcaption></figure>' +
+    '<figure class="hero-fig"><img src="' + urlFor(last, 'thumb') + '" alt=""><figcaption>Latest</figcaption></figure>' +
     '</div><div class="hero-stats">' +
     '<div class="stat"><b>' + photos.length + '</b><span>photos</span></div>' +
     '<div class="stat"><b>' + days + '</b><span>' + (days === 1 ? 'day' : 'days') + '</span></div>' +
@@ -172,25 +252,67 @@ function openNewProjectModal(thenCamera) {
 function closeNewProjectModal() { $('newModal').classList.remove('on'); }
 async function createProject() {
   const name = $('projName').value.trim() || 'Untitled project';
-  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), photos: [], reminder: 'off' };
-  await dbPut(p);
+  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), reminder: 'off' };
+  await dbPutProject(p);
   closeNewProjectModal();
   state.projectId = p.id;
   if (newProjectAfterCreate) { openCamera(); } else { openProject(p.id); }
   renderHome();
 }
 
+let cfResolve = null;
+function confirmSheet(title, msg, okLabel) {
+  return new Promise(res => {
+    cfResolve = res;
+    $('cfTitle').textContent = title;
+    $('cfMsg').textContent = msg;
+    $('cfOk').textContent = okLabel || 'Confirm';
+    $('cfModal').classList.add('on');
+  });
+}
+function cfDone(v) {
+  $('cfModal').classList.remove('on');
+  if (cfResolve) { cfResolve(v); cfResolve = null; }
+}
+
 async function deleteCurrentProject() {
   if (!state.projectId) return;
-  if (!confirm('Delete this project and all its photos?')) return;
-  await dbDel(state.projectId);
+  const ok = await confirmSheet('Delete this project?', 'All its photos will be permanently removed from this device.', 'Delete project');
+  if (!ok) return;
+  const p = await dbGetProject(state.projectId);
+  if (p) {
+    const photos = await photosOf(p);
+    for (const ph of photos) {
+      if (!ph.dataUrl) { try { await dbDelPhoto(ph.id); } catch (e) {} }
+      dropUrls(ph.id);
+    }
+  }
+  await dbDelProject(state.projectId);
   state.projectId = null;
   show('home');
   renderHome();
 }
 
+function openRename() {
+  $('renName').value = $('projTitle').textContent;
+  $('renModal').classList.add('on');
+  setTimeout(() => $('renName').focus(), 60);
+}
+async function saveRename() {
+  const p = state.projectId ? await dbGetProject(state.projectId) : null;
+  const nv = $('renName').value.trim();
+  if (p && nv) {
+    p.name = nv;
+    p.updatedAt = Date.now();
+    await dbPutProject(p);
+    $('projTitle').textContent = nv;
+    renderHome();
+  }
+  $('renModal').classList.remove('on');
+}
+
 let stream = null, facing = 'environment', gridMode = 0, camHasOverlay = false;
-let overlayRaw = null, overlayEdge = null;
+let overlayRaw = null, overlayEdge = null, zoomTrack = null;
 
 function computeEdges(dataUrl) {
   return new Promise((resolve, reject) => {
@@ -265,7 +387,7 @@ function syncModeSeg() {
 }
 function hideOverlay() {
   overlayRaw = null; overlayEdge = null; camHasOverlay = false;
-  const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges');
+  const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges'); ov.classList.remove('diff');
   $('opRow').style.display = 'none'; $('modeSeg').style.display = 'none';
   $('camLastThumb').style.display = 'none'; $('camhint').style.display = 'block';
 }
@@ -297,13 +419,20 @@ async function applyOverlay() {
 }
 
 async function openCamera() {
-  const p = await dbGet(state.projectId);
-  $('camProjName').textContent = p ? p.name : 'Align';
-  const last = p && p.photos && p.photos.length ? p.photos[p.photos.length - 1] : null;
+  const p = await dbGetProject(state.projectId);
+  if (!p) return;
+  $('camProjName').textContent = p.name;
+  const photos = await photosOf(p);
+  const last = photos.length ? photos[photos.length - 1] : null;
   syncModeSeg();
-  if (last) setOverlay(last.dataUrl); else hideOverlay();
+  if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
   show('camera');
-  startCamera();
+  await startCamera();
+  if (last && typeof last.zoom === 'number' && zoomTrack) {
+    $('zoom').value = last.zoom;
+    applyZoom(last.zoom);
+    camBadge('Zoom restored from last photo');
+  }
 }
 
 function setGrid() {
@@ -318,6 +447,31 @@ function setGrid() {
   });
   g.appendChild(Object.assign(document.createElement('div'), { className: 'gcross' }));
   lbl.textContent = gridMode === 1 ? 'Thirds' : 'Fine';
+}
+
+function setupZoom() {
+  const row = $('zoomRow');
+  zoomTrack = null;
+  const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  let caps = null;
+  try { caps = track && track.getCapabilities ? track.getCapabilities() : null; } catch (e) {}
+  if (track && caps && caps.zoom && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
+    zoomTrack = track;
+    const z = $('zoom');
+    z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step || 0.1;
+    let cur = caps.zoom.min;
+    try { const s = track.getSettings(); if (typeof s.zoom === 'number') cur = s.zoom; } catch (e) {}
+    z.value = cur;
+    $('zoomv').textContent = Number(cur).toFixed(1) + '×';
+    row.style.display = 'flex';
+  } else {
+    row.style.display = 'none';
+  }
+}
+async function applyZoom(v) {
+  if (!zoomTrack) return;
+  try { await zoomTrack.applyConstraints({ advanced: [{ zoom: Number(v) }] }); } catch (e) {}
+  $('zoomv').textContent = Number(v).toFixed(1) + '×';
 }
 
 async function startCamera() {
@@ -335,6 +489,7 @@ async function startCamera() {
     stream = newStream;
     $('video').srcObject = stream;
     await $('video').play();
+    setupZoom();
     err.classList.remove('on');
   } catch (e) {
     const n = e && e.name;
@@ -345,63 +500,116 @@ async function startCamera() {
     err.classList.add('on');
   }
 }
-function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  zoomTrack = null;
+}
+
+function toBlobP(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
 
 async function capturePhoto() {
   const v = $('video');
-  if (!v.videoWidth) return;
+  if (!v.videoWidth || !state.projectId) return;
+  if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+
   const c = document.createElement('canvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-  let url; try { url = c.toDataURL('image/jpeg', 0.95); } catch (e) { return; }
+  c.getContext('2d').drawImage(v, 0, 0);
 
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
 
-  const p = await dbGet(state.projectId);
-  if (!p) return;
-  p.photos = p.photos || [];
-  p.photos.push({ id: uid(), dataUrl: url, ts: Date.now() });
-  p.updatedAt = Date.now();
-  await dbPut(p);
+  const blob = await toBlobP(c, 'image/jpeg', 0.92);
+  if (!blob) return;
+  const tw = 320, th = Math.max(1, Math.round(tw * c.height / c.width));
+  const tc = document.createElement('canvas'); tc.width = tw; tc.height = th;
+  tc.getContext('2d').drawImage(c, 0, 0, tw, th);
+  const thumb = await toBlobP(tc, 'image/jpeg', 0.7);
 
-  setOverlay(url);
-  camBadge('Photo ' + p.photos.length + ' saved — now aligned to this');
+  const p = await dbGetProject(state.projectId);
+  if (!p) return;
+  const ph = { id: uid(), projectId: p.id, ts: Date.now(), blob };
+  if (thumb) ph.thumb = thumb;
+  if (zoomTrack) {
+    try { const s = zoomTrack.getSettings(); if (typeof s.zoom === 'number') ph.zoom = s.zoom; } catch (e) {}
+  }
+  await dbAddPhoto(ph);
+  p.updatedAt = Date.now();
+  await dbPutProject(p);
+
+  const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
+  setOverlay(urlFor(ph, 'full'));
+  camBadge('Photo ' + count + ' saved — now aligned to this');
 }
 
 function camBadge(text) {
   const b = $('cbadge');
   b.textContent = text;
   b.style.display = 'block';
-  b.style.animation = 'badgePop .3s ease';
+  b.style.animation = 'none';
+  requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
   clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2400);
 }
 
-let expFps = 3, expTimer = null, expPhotos = [], projPhotos = [];
-
-function fmtFullDate(ts) {
-  try { return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
-  catch (e) { return fmtDate(ts); }
-}
-function openPhotoView(src, cap) {
-  $('photoViewImg').src = src;
-  $('photoViewCap').textContent = cap || '';
+let viewList = [], viewIndex = 0;
+function openPhotoViewAt(i) {
+  if (!viewList.length) return;
+  viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
+  const ph = viewList[viewIndex];
+  $('photoViewImg').src = urlFor(ph, 'full');
+  $('photoViewCap').textContent = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts);
+  $('pvPrev').style.visibility = viewIndex > 0 ? 'visible' : 'hidden';
+  $('pvNext').style.visibility = viewIndex < viewList.length - 1 ? 'visible' : 'hidden';
   $('photoView').classList.add('on');
+  setTheme(true);
 }
-function closePhotoView() { $('photoView').classList.remove('on'); }
+function closePhotoView() {
+  $('photoView').classList.remove('on');
+  setTheme(state.screen === 'camera');
+}
+async function deleteViewedPhoto() {
+  const ph = viewList[viewIndex];
+  if (!ph || !state.projectId) return;
+  const ok = await confirmSheet('Delete this photo?', 'It will be permanently removed from the series.', 'Delete photo');
+  if (!ok) return;
+  if (ph.dataUrl) {
+    const p = await dbGetProject(state.projectId);
+    if (p && p.photos) { p.photos = p.photos.filter(x => x.id !== ph.id); await dbPutProject(p); }
+  } else {
+    try { await dbDelPhoto(ph.id); } catch (e) {}
+  }
+  dropUrls(ph.id);
+  const oldIndex = viewIndex;
+  await openProject(state.projectId);
+  renderHome();
+  viewList = projPhotos;
+  if (!viewList.length) { closePhotoView(); return; }
+  openPhotoViewAt(Math.min(oldIndex, viewList.length - 1));
+}
+
+let expFps = 3, expTimer = null, expPhotos = [];
+
 async function openExport() {
-  const p = await dbGet(state.projectId);
-  expPhotos = (p.photos || []);
-  $('expCount').textContent = expPhotos.length + (expPhotos.length === 1 ? ' photo' : ' photos') + ' · preview';
+  const p = await dbGetProject(state.projectId);
+  if (!p) return;
+  expPhotos = await photosOf(p);
+  const n = expPhotos.length;
+  $('expCount').textContent = n === 0 ? 'No photos yet'
+    : n === 1 ? '1 photo — add at least one more to make a GIF'
+    : n + ' photos · preview';
   $('gifResult').innerHTML = '';
+  const btn = $('makeGifBtn');
+  btn.disabled = n < 2;
+  btn.textContent = 'Make GIF';
   show('export');
   startExportPreview();
 }
 function startExportPreview() {
   clearInterval(expTimer);
   if (!expPhotos.length) { $('expFrame').removeAttribute('src'); return; }
-  let i = 0; $('expFrame').src = expPhotos[0].dataUrl;
-  expTimer = setInterval(() => { i = (i + 1) % expPhotos.length; $('expFrame').src = expPhotos[i].dataUrl; }, 1000 / expFps);
+  let i = 0; $('expFrame').src = urlFor(expPhotos[0], 'full');
+  if (expPhotos.length < 2) return;
+  expTimer = setInterval(() => { i = (i + 1) % expPhotos.length; $('expFrame').src = urlFor(expPhotos[i], 'full'); }, 1000 / expFps);
 }
 
 async function loadImage(src) {
@@ -415,21 +623,21 @@ async function loadGifenc() {
 }
 
 async function makeGif() {
-  if (!expPhotos.length) return;
+  if (expPhotos.length < 2) return;
   const btn = $('makeGifBtn');
   const res = $('gifResult');
   btn.disabled = true; btn.textContent = 'Working…';
   res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIF…</p>';
   try {
     const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
-    const first = await loadImage(expPhotos[0].dataUrl);
+    const first = await loadImage(urlFor(expPhotos[0], 'full'));
     const W = 480, H = Math.round(W * first.height / first.width) || 640;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const enc = GIFEncoder();
     const delay = Math.round(1000 / expFps);
     for (const ph of expPhotos) {
-      const im = await loadImage(ph.dataUrl);
+      const im = await loadImage(urlFor(ph, 'full'));
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
       ctx.drawImage(im, 0, 0, W, H);
       const data = ctx.getImageData(0, 0, W, H).data;
@@ -473,32 +681,65 @@ function renderRemOpts() {
   }).join('');
 }
 async function openReminders() {
-  const p = await dbGet(state.projectId);
+  const p = await dbGetProject(state.projectId);
   const cur = (p && p.reminder) ? p.reminder : 'Off';
   state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Off';
   renderRemOpts();
-  $('remNote').textContent = 'In this web version you get a notification while the app is active in the background. Fully reliable reminders at a fixed time will come in the native app version.';
+  $('remNote').textContent = 'You’ll see a “Due” badge on the project when it’s time for the next photo. Push notifications at a fixed time will come with the native app version.';
   show('reminders');
 }
 async function saveReminder() {
-  const p = await dbGet(state.projectId);
-  p.reminder = state._rem || 'Off';
-  await dbPut(p);
-  if (p.reminder !== 'Off' && 'Notification' in window && Notification.permission === 'default') {
-    try { await Notification.requestPermission(); } catch (e) {}
+  const p = await dbGetProject(state.projectId);
+  if (p) {
+    p.reminder = state._rem || 'Off';
+    await dbPutProject(p);
+    if (p.reminder !== 'Off' && 'Notification' in window && Notification.permission === 'default') {
+      try { await Notification.requestPermission(); } catch (e) {}
+    }
   }
   openProject(state.projectId);
+  renderHome();
 }
 
 function statCard(v, l) { return '<div class="stat-card"><b>' + v + '</b><span>' + l + '</span></div>'; }
 async function openSettings() {
-  const projects = await dbAll();
-  let photos = 0, bytes = 0;
-  projects.forEach(p => (p.photos || []).forEach(ph => { photos++; bytes += Math.round((ph.dataUrl ? ph.dataUrl.length : 0) * 0.73); }));
+  const projects = await dbProjects();
+  let count = 0, bytes = 0;
+  try {
+    const all = await reqP(store('photos', 'readonly').getAll());
+    count = all.length;
+    all.forEach(ph => { bytes += (ph.blob ? ph.blob.size : 0) + (ph.thumb ? ph.thumb.size : 0); });
+  } catch (e) {}
+  projects.forEach(p => (p.photos || []).forEach(ph => { count++; bytes += Math.round((ph.dataUrl ? ph.dataUrl.length : 0) * 0.73); }));
   const mb = bytes / 1048576;
-  const mbLabel = mb >= 10 ? Math.round(mb) : mb.toFixed(1);
-  $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(photos, 'photos') + statCard(mbLabel, 'MB used');
+  const mbLabel = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1);
+  $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(count, 'photos') + statCard(mbLabel, 'MB used');
+  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' · web preview';
   show('settings');
+}
+
+async function wipeAllData() {
+  const ok = await confirmSheet('Delete all data?', 'Every project and photo on this device will be permanently removed. This cannot be undone.', 'Delete everything');
+  if (!ok) return;
+  try { await reqP(store('photos', 'readwrite').clear()); } catch (e) {}
+  try { await reqP(store('projects', 'readwrite').clear()); } catch (e) {}
+  urlCache.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} });
+  urlCache.clear();
+  try { localStorage.removeItem('aligno_seen'); } catch (e) {}
+  state.projectId = null;
+  await renderHome();
+  show('landing');
+}
+
+function watchUpdates(reg) {
+  if (!reg) return;
+  reg.addEventListener('updatefound', () => {
+    const nw = reg.installing;
+    if (!nw) return;
+    nw.addEventListener('statechange', () => {
+      if (nw.state === 'installed' && navigator.serviceWorker.controller) $('updatePill').classList.add('on');
+    });
+  });
 }
 
 function wire() {
@@ -506,6 +747,8 @@ function wire() {
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
   $('newCancel').addEventListener('click', closeNewProjectModal);
   $('newCreate').addEventListener('click', createProject);
+  $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
+  $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
   renderExamples();
   $('exampleList').addEventListener('click', (e) => {
     const b = e.target.closest('[data-name]'); if (!b) return;
@@ -513,16 +756,25 @@ function wire() {
     $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel');
   });
-  $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
-  $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
 
   document.querySelectorAll('[data-nav="home"]').forEach(el => el.addEventListener('click', () => { show('home'); renderHome(); }));
   $('delProjectBtn').addEventListener('click', deleteCurrentProject);
+  $('renameBtn').addEventListener('click', openRename);
+  $('renCancel').addEventListener('click', () => $('renModal').classList.remove('on'));
+  $('renSave').addEventListener('click', saveRename);
+  $('renName').addEventListener('keydown', e => { if (e.key === 'Enter') saveRename(); });
+  $('renModal').addEventListener('click', e => { if (e.target === $('renModal')) $('renModal').classList.remove('on'); });
+
+  $('cfOk').addEventListener('click', () => cfDone(true));
+  $('cfCancel').addEventListener('click', () => cfDone(false));
+  $('cfModal').addEventListener('click', e => { if (e.target === $('cfModal')) cfDone(false); });
+
   $('newPhotoBtn').addEventListener('click', openCamera);
   $('exportBtn').addEventListener('click', openExport);
   $('reminderBtn').addEventListener('click', openReminders);
   $('settingsBtn').addEventListener('click', openSettings);
-  $('introRow').addEventListener('click', () => { try { localStorage.removeItem('aligno_seen'); } catch (e) {} show('landing'); });
+  $('introRow').addEventListener('click', () => { show('landing'); });
+  $('wipeRow').addEventListener('click', wipeAllData);
 
   $('exportBack').addEventListener('click', () => { clearInterval(expTimer); openProject(state.projectId); });
   $('remBack').addEventListener('click', () => openProject(state.projectId));
@@ -534,13 +786,29 @@ function wire() {
 
   $('camClose').addEventListener('click', () => { openProject(state.projectId); });
   $('camLastThumb').addEventListener('click', () => { if (state.projectId) openProject(state.projectId); });
+
   $('photoViewClose').addEventListener('click', closePhotoView);
   $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
+  $('pvPrev').addEventListener('click', () => openPhotoViewAt(viewIndex - 1));
+  $('pvNext').addEventListener('click', () => openPhotoViewAt(viewIndex + 1));
+  $('pvDelete').addEventListener('click', deleteViewedPhoto);
+  let tX = null, tY = null;
+  $('photoView').addEventListener('touchstart', e => { tX = e.touches[0].clientX; tY = e.touches[0].clientY; }, { passive: true });
+  $('photoView').addEventListener('touchend', e => {
+    if (tX === null) return;
+    const dx = e.changedTouches[0].clientX - tX;
+    const dy = e.changedTouches[0].clientY - tY;
+    tX = null; tY = null;
+    if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) openPhotoViewAt(viewIndex + 1); else openPhotoViewAt(viewIndex - 1);
+    }
+  }, { passive: true });
   $('photoGrid').addEventListener('click', (e) => {
     const t = e.target.closest('[data-i]'); if (!t) return;
-    const ph = projPhotos[+t.getAttribute('data-i')];
-    if (ph) openPhotoView(ph.dataUrl, fmtFullDate(ph.ts));
+    viewList = projPhotos;
+    openPhotoViewAt(+t.getAttribute('data-i'));
   });
+
   $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
   $('camRetry').addEventListener('click', startCamera);
   $('gridBtn').addEventListener('click', () => { gridMode = (gridMode + 1) % 3; setGrid(); });
@@ -555,11 +823,14 @@ function wire() {
     $('opv').textContent = Math.round(this.value) + '%';
     if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
   });
+  $('zoom').addEventListener('input', function () { applyZoom(this.value); });
 
   $('fps').addEventListener('input', function () {
     expFps = Math.round(this.value); $('fpsv').textContent = expFps + ' fps'; startExportPreview();
   });
   $('makeGifBtn').addEventListener('click', makeGif);
+
+  $('updatePill').addEventListener('click', () => location.reload());
 
   let deferred = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').style.display = 'flex'; });
@@ -571,11 +842,14 @@ function wire() {
 (async function init() {
   try {
     await openDB();
+    try { await migrate(); } catch (e) {}
     wire();
     await renderHome();
     let seen = false; try { seen = !!localStorage.getItem('aligno_seen'); } catch (e) {}
-    if (seen) show('home');
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (seen) show('home'); else setTheme(false);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {});
+    }
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
   }
