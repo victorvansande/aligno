@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -385,19 +385,41 @@ function syncModeSeg() {
   $('omEdges').classList.toggle('on', state.overlayMode === 'edges');
   $('omDiff').classList.toggle('on', state.overlayMode === 'diff');
 }
+let overlaySource = 'project';
 function hideOverlay() {
-  overlayRaw = null; overlayEdge = null; camHasOverlay = false;
+  overlayRaw = null; overlayEdge = null; camHasOverlay = false; overlaySource = 'project';
   const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges'); ov.classList.remove('diff');
   $('opRow').style.display = 'none'; $('modeSeg').style.display = 'none';
   $('camLastThumb').style.display = 'none'; $('camhint').style.display = 'block';
+  $('libChip').style.display = 'none';
 }
-function setOverlay(raw) {
+function setOverlay(raw, source) {
   overlayRaw = raw; overlayEdge = null; camHasOverlay = true;
+  overlaySource = source || 'project';
   $('op').value = 50; $('opv').textContent = '50%';
   $('opRow').style.display = 'flex'; $('modeSeg').style.display = 'flex';
   $('camLastThumb').src = raw; $('camLastThumb').style.display = 'block';
   $('camhint').style.display = 'none';
+  $('libChip').style.display = overlaySource === 'library' ? 'flex' : 'none';
   applyOverlay();
+}
+async function loadLibraryOverlay(file) {
+  if (!file) return;
+  const url = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  setOverlay(url, 'library');
+  camBadge('Aligning to your library photo');
+}
+async function resetOverlayToLast() {
+  const p = state.projectId ? await dbGetProject(state.projectId) : null;
+  if (!p) { hideOverlay(); return; }
+  const photos = await photosOf(p);
+  const last = photos.length ? photos[photos.length - 1] : null;
+  if (last) setOverlay(urlFor(last, 'full'), 'project'); else hideOverlay();
 }
 async function applyOverlay() {
   const ov = $('overlay');
@@ -786,6 +808,13 @@ function wire() {
 
   $('camClose').addEventListener('click', () => { openProject(state.projectId); });
   $('camLastThumb').addEventListener('click', () => { if (state.projectId) openProject(state.projectId); });
+  $('libBtn').addEventListener('click', () => $('libInput').click());
+  $('libInput').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    loadLibraryOverlay(f);
+    e.target.value = '';
+  });
+  $('libReset').addEventListener('click', resetOverlayToLast);
 
   $('photoViewClose').addEventListener('click', closePhotoView);
   $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
