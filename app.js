@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -99,6 +99,14 @@ function fmtFullDate(ts) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+function isImported(ph) { return ph && ph.src === 'import'; }
+function srcIcon(ph) {
+  return isImported(ph)
+    ? '<svg class="srcic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3.5"/><circle cx="8.5" cy="9" r="1.7"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>'
+    : '<svg class="srcic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg>';
+}
+function srcLabel(ph) { return isImported(ph) ? 'Imported' : 'Taken in app'; }
+
 function plantIll(g) {
   const sh = 6 + g * 22, top = 30 - sh, n = Math.max(1, Math.round(1 + g * 3));
   let lv = '';
@@ -178,15 +186,85 @@ async function renderHome() {
       : '<div class="pthumb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
     const n = photos.length;
     const due = isDue(p, last) ? '<span class="duechip">Due</span>' : '';
-    return '<div class="pcard" data-open="' + p.id + '" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' + thumb +
+    return '<div class="pswipe" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' +
+      '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
+      '<div class="pcard" data-open="' + p.id + '">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
       '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
-      '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>';
+      '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
   list.innerHTML = cards.join('');
-  list.querySelectorAll('[data-open]').forEach(el => {
-    el.addEventListener('click', () => openProject(el.getAttribute('data-open')));
+  list.querySelectorAll('.pswipe').forEach(wireSwipeCard);
+  list.querySelectorAll('[data-del]').forEach(el => {
+    el.addEventListener('click', () => deleteProjectFromHome(el.getAttribute('data-del')));
   });
+}
+
+const SWIPE_W = 84;
+function closeOtherSwipes(except) {
+  document.querySelectorAll('.pswipe').forEach(w => {
+    if (w !== except && w._swOpen) { w._swOpen = false; const c = w.querySelector('.pcard'); c.style.transition = 'transform .2s ease'; c.style.transform = 'translateX(0)'; }
+  });
+}
+function wireSwipeCard(wrap) {
+  const card = wrap.querySelector('.pcard');
+  const link = wrap.querySelector('[data-open]');
+  let startX = 0, startY = 0, baseX = 0, dragging = false, moved = false;
+  wrap._swOpen = false;
+  function setX(x, animate) {
+    card.style.transition = animate ? 'transform .2s ease' : 'none';
+    if (x === 0) {
+      card.style.transform = '';
+      clearTimeout(card._clrT);
+      if (animate) card._clrT = setTimeout(() => { card.style.transition = ''; }, 220);
+      else card.style.transition = '';
+    } else {
+      card.style.transform = 'translateX(' + x + 'px)';
+    }
+  }
+  wrap.addEventListener('pointerdown', e => {
+    if (e.target.closest('.pdel')) return;
+    dragging = true; moved = false;
+    startX = e.clientX; startY = e.clientY; baseX = wrap._swOpen ? -SWIPE_W : 0;
+    closeOtherSwipes(wrap);
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!moved && Math.hypot(dx, dy) < 8) return;
+    if (!moved && Math.abs(dy) > Math.abs(dx)) { dragging = false; return; }
+    moved = true;
+    setX(Math.max(-SWIPE_W, Math.min(0, baseX + dx)), false);
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (!moved) return;
+    const dx = e.clientX - startX;
+    const openIt = (baseX + dx) < -SWIPE_W / 2;
+    wrap._swOpen = openIt;
+    setX(openIt ? -SWIPE_W : 0, true);
+    link._justSwiped = true;
+  }
+  wrap.addEventListener('pointerup', endDrag);
+  wrap.addEventListener('pointercancel', () => { dragging = false; });
+  link.addEventListener('click', (e) => {
+    if (link._justSwiped) { link._justSwiped = false; e.preventDefault(); e.stopPropagation(); return; }
+    openProject(link.getAttribute('data-open'));
+  });
+}
+async function deleteProjectFromHome(id) {
+  const p = await dbGetProject(id);
+  const ok = await confirmSheet('Delete “' + ((p && p.name) || 'this project') + '”?', 'All its photos will be permanently removed from this device.', 'Delete project');
+  if (!ok) { closeOtherSwipes(null); return; }
+  const photos = p ? await photosOf(p) : [];
+  for (const ph of photos) {
+    if (!ph.dataUrl) { try { await dbDelPhoto(ph.id); } catch (e) {} }
+    dropUrls(ph.id);
+  }
+  await dbDelProject(id);
+  if (state.projectId === id) state.projectId = null;
+  renderHome();
 }
 
 let projPhotos = [];
@@ -219,7 +297,7 @@ async function openProject(id) {
   } else {
     empty.innerHTML = '';
     grid.innerHTML = photos.map((ph, i) =>
-      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + urlFor(ph, 'thumb') + '" alt=""><span class="day">' + fmtDate(ph.ts) + '</span></div>'
+      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + urlFor(ph, 'thumb') + '" alt=""><span class="day">' + srcIcon(ph) + fmtDate(ph.ts) + '</span></div>'
     ).join('');
   }
   show('project');
@@ -232,9 +310,9 @@ function renderProjectHero(photos) {
   const days = Math.max(1, Math.round((last.ts - first.ts) / 86400000));
   hero.innerHTML =
     '<div class="hero"><div class="hero-row">' +
-    '<figure class="hero-fig"><img src="' + urlFor(first, 'thumb') + '" alt=""><figcaption>First</figcaption></figure>' +
+    '<figure class="hero-fig"><img src="' + urlFor(first, 'thumb') + '" alt=""><figcaption>' + srcIcon(first) + 'First</figcaption></figure>' +
     '<div class="hero-ar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>' +
-    '<figure class="hero-fig"><img src="' + urlFor(last, 'thumb') + '" alt=""><figcaption>Latest</figcaption></figure>' +
+    '<figure class="hero-fig"><img src="' + urlFor(last, 'thumb') + '" alt=""><figcaption>' + srcIcon(last) + 'Latest</figcaption></figure>' +
     '</div><div class="hero-stats">' +
     '<div class="stat"><b>' + photos.length + '</b><span>photos</span></div>' +
     '<div class="stat"><b>' + days + '</b><span>' + (days === 1 ? 'day' : 'days') + '</span></div>' +
@@ -550,7 +628,7 @@ async function capturePhoto() {
 
   const p = await dbGetProject(state.projectId);
   if (!p) return;
-  const ph = { id: uid(), projectId: p.id, ts: Date.now(), blob };
+  const ph = { id: uid(), projectId: p.id, ts: Date.now(), blob, src: 'camera' };
   if (thumb) ph.thumb = thumb;
   if (zoomTrack) {
     try { const s = zoomTrack.getSettings(); if (typeof s.zoom === 'number') ph.zoom = s.zoom; } catch (e) {}
@@ -721,7 +799,7 @@ async function alUsePhoto() {
   try {
     const baked = await alBakeCurrent();
     const ts = f.lastModified || Date.now();
-    const ph = { id: uid(), projectId: alState.projectId, ts, blob: baked.blob, thumb: baked.thumb };
+    const ph = { id: uid(), projectId: alState.projectId, ts, blob: baked.blob, thumb: baked.thumb, src: 'import' };
     await dbAddPhoto(ph);
     const p = await dbGetProject(alState.projectId);
     if (p) { p.updatedAt = Date.now(); await dbPutProject(p); }
@@ -754,18 +832,18 @@ async function alFinish() {
 }
 
 let alPendingProjectId = null;
-async function beginImportForProject(projectId) {
+let alPendingCreateName = null;
+function beginImportForProject(projectId) {
   alPendingProjectId = projectId;
+  alPendingCreateName = null;
   $('alignFilesInput').click();
 }
-async function createProjectAndImport() {
+function createProjectAndImport() {
   const name = $('projName').value.trim() || 'Untitled project';
-  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), reminder: 'off' };
-  await dbPutProject(p);
   closeNewProjectModal();
-  state.projectId = p.id;
-  renderHome();
-  beginImportForProject(p.id);
+  alPendingProjectId = null;
+  alPendingCreateName = name;
+  $('alignFilesInput').click();
 }
 
 let viewList = [], viewIndex = 0;
@@ -774,7 +852,8 @@ function openPhotoViewAt(i) {
   viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
   const ph = viewList[viewIndex];
   $('photoViewImg').src = urlFor(ph, 'full');
-  $('photoViewCap').textContent = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts);
+  $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
+    ' <span class="pv-src">' + srcIcon(ph) + srcLabel(ph) + '</span>';
   $('pvPrev').style.visibility = viewIndex > 0 ? 'visible' : 'hidden';
   $('pvNext').style.visibility = viewIndex < viewList.length - 1 ? 'visible' : 'hidden';
   $('photoView').classList.add('on');
@@ -1013,11 +1092,21 @@ function wire() {
   });
   $('libReset').addEventListener('click', resetOverlayToLast);
 
-  $('alignFilesInput').addEventListener('change', (e) => {
+  $('alignFilesInput').addEventListener('change', async (e) => {
     const files = e.target.files;
-    const pid = alPendingProjectId || state.projectId;
+    const createName = alPendingCreateName;
+    let pid = alPendingProjectId || state.projectId;
     alPendingProjectId = null;
-    if (files && files.length && pid) startAligner(pid, files);
+    alPendingCreateName = null;
+    if (!files || !files.length) { e.target.value = ''; return; }
+    if (!pid && createName !== null) {
+      const p = { id: uid(), name: createName, createdAt: Date.now(), updatedAt: Date.now(), reminder: 'off' };
+      await dbPutProject(p);
+      pid = p.id;
+      state.projectId = pid;
+      renderHome();
+    }
+    if (pid) startAligner(pid, files);
     e.target.value = '';
   });
   $('alClose').addEventListener('click', alCloseAligner);
