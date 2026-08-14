@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -139,7 +139,7 @@ function setTheme(dark) {
   if (m) m.setAttribute('content', dark ? '#0d0f12' : '#ffffff');
 }
 
-const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings'];
+const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings', 'aligner'];
 function show(name) {
   if (state.screen === 'camera' && name !== 'camera') stopCamera();
   screens.forEach(s => {
@@ -147,7 +147,7 @@ function show(name) {
     if (el) el.classList.toggle('active', s === name);
   });
   state.screen = name;
-  setTheme(name === 'camera');
+  setTheme(name === 'camera' || name === 'aligner');
 }
 
 function reminderInterval(p) {
@@ -572,6 +572,201 @@ function camBadge(text) {
   requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
   clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2400);
 }
+function alBadge(text) {
+  const b = $('alBadge');
+  b.textContent = text;
+  b.style.display = 'block';
+  b.style.animation = 'none';
+  requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
+  clearTimeout(window._abt); window._abt = setTimeout(() => { b.style.display = 'none'; }, 2400);
+}
+
+/* --- Align from library: import several existing photos and manually
+   center the same subject in each one, so the set plays back stabilized. --- */
+const AL_OUT = 1000;
+const alState = {
+  projectId: null, files: [], index: 0, added: 0,
+  scale: 1, tx: 0, ty: 0, base: { w: 1, h: 1 }, frame: 100,
+  ghostOn: true, ghostUrl: null, objUrl: null, pointers: new Map(), pinchStart: null
+};
+
+function alClampPan() {
+  const rw = alState.base.w * alState.scale, rh = alState.base.h * alState.scale;
+  const maxX = Math.max(0, (rw - alState.frame) / 2);
+  const maxY = Math.max(0, (rh - alState.frame) / 2);
+  alState.tx = Math.max(-maxX, Math.min(maxX, alState.tx));
+  alState.ty = Math.max(-maxY, Math.min(maxY, alState.ty));
+}
+function alRender() {
+  alClampPan();
+  $('alImg').style.transform = 'translate(calc(-50% + ' + alState.tx + 'px), calc(-50% + ' + alState.ty + 'px)) scale(' + alState.scale + ')';
+}
+function alSetZoom(v) {
+  alState.scale = Math.max(1, Math.min(4, Number(v)));
+  alRender();
+  $('alZoom').value = alState.scale;
+  $('alZoomv').textContent = alState.scale.toFixed(1) + '×';
+}
+
+function startAligner(projectId, fileList) {
+  const files = Array.from(fileList || []).filter(f => f && f.type && f.type.indexOf('image/') === 0);
+  if (!files.length || !projectId) return;
+  files.sort((a, b) => (a.lastModified || 0) - (b.lastModified || 0));
+  alState.projectId = projectId;
+  alState.files = files;
+  alState.index = 0;
+  alState.added = 0;
+  alState.ghostUrl = null;
+  alState.ghostOn = true;
+  $('alGhostToggle').classList.add('act');
+  show('aligner');
+  alLoadCurrent();
+}
+
+async function alLoadCurrent() {
+  const f = alState.files[alState.index];
+  if (!f) { alFinish(); return; }
+  $('alCount').textContent = (alState.index + 1) + ' of ' + alState.files.length;
+  $('alHint').style.display = alState.index === 0 ? 'block' : 'none';
+
+  const frameEl = $('alFrame');
+  alState.frame = frameEl.getBoundingClientRect().width || 300;
+
+  if (alState.objUrl) { try { URL.revokeObjectURL(alState.objUrl); } catch (e) {} }
+  const url = URL.createObjectURL(f);
+  alState.objUrl = url;
+
+  const img = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = url;
+  }).catch(() => null);
+
+  if (!img) { alSkipPhoto(); return; }
+
+  const r = Math.max(alState.frame / img.naturalWidth, alState.frame / img.naturalHeight);
+  alState.base = { w: img.naturalWidth * r, h: img.naturalHeight * r };
+  alState.scale = 1; alState.tx = 0; alState.ty = 0;
+
+  const el = $('alImg');
+  el.src = url;
+  el.style.width = alState.base.w + 'px';
+  el.style.height = alState.base.h + 'px';
+  $('alZoom').min = 1; $('alZoom').max = 4;
+  alSetZoom(1);
+
+  const ghost = $('alGhost');
+  if (alState.ghostUrl && alState.ghostOn) { ghost.src = alState.ghostUrl; ghost.classList.add('on'); }
+  else { ghost.classList.remove('on'); }
+
+  $('alPrevThumb').style.display = alState.ghostUrl ? 'block' : 'none';
+  if (alState.ghostUrl) $('alPrevThumb').src = alState.ghostUrl;
+}
+
+function alPointerPos(e) { return { x: e.clientX, y: e.clientY }; }
+function alOnPointerDown(e) {
+  $('alImg').setPointerCapture && $('alImg').setPointerCapture(e.pointerId);
+  alState.pointers.set(e.pointerId, alPointerPos(e));
+  if (alState.pointers.size === 2) {
+    const pts = Array.from(alState.pointers.values());
+    alState.pinchStart = {
+      dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+      scale: alState.scale
+    };
+  }
+}
+function alOnPointerMove(e) {
+  if (!alState.pointers.has(e.pointerId)) return;
+  const prev = alState.pointers.get(e.pointerId);
+  const cur = alPointerPos(e);
+  alState.pointers.set(e.pointerId, cur);
+  if (alState.pointers.size >= 2 && alState.pinchStart) {
+    const pts = Array.from(alState.pointers.values());
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    alSetZoom(alState.pinchStart.scale * (dist / alState.pinchStart.dist));
+  } else if (alState.pointers.size === 1) {
+    alState.tx += cur.x - prev.x;
+    alState.ty += cur.y - prev.y;
+    alRender();
+  }
+}
+function alOnPointerUp(e) {
+  alState.pointers.delete(e.pointerId);
+  if (alState.pointers.size < 2) alState.pinchStart = null;
+}
+function alOnWheel(e) {
+  e.preventDefault();
+  alSetZoom(alState.scale + (e.deltaY < 0 ? 0.08 : -0.08));
+}
+
+async function alBakeCurrent() {
+  const img = $('alImg'), frame = $('alFrame');
+  const fr = frame.getBoundingClientRect(), ir = img.getBoundingClientRect();
+  const s = AL_OUT / fr.width;
+  const c = document.createElement('canvas'); c.width = AL_OUT; c.height = AL_OUT;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, (ir.left - fr.left) * s, (ir.top - fr.top) * s, ir.width * s, ir.height * s);
+  const blob = await toBlobP(c, 'image/jpeg', 0.92);
+  const tc = document.createElement('canvas'); tc.width = 320; tc.height = 320;
+  tc.getContext('2d').drawImage(c, 0, 0, 320, 320);
+  const thumb = await toBlobP(tc, 'image/jpeg', 0.7);
+  return { blob, thumb, dataUrl: c.toDataURL('image/jpeg', 0.8) };
+}
+
+async function alUsePhoto() {
+  const f = alState.files[alState.index];
+  if (!f) return;
+  $('alUse').style.pointerEvents = 'none';
+  try {
+    const baked = await alBakeCurrent();
+    const ts = f.lastModified || Date.now();
+    const ph = { id: uid(), projectId: alState.projectId, ts, blob: baked.blob, thumb: baked.thumb };
+    await dbAddPhoto(ph);
+    const p = await dbGetProject(alState.projectId);
+    if (p) { p.updatedAt = Date.now(); await dbPutProject(p); }
+    alState.added++;
+    alState.ghostUrl = baked.dataUrl;
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+    alBadge('Aligned ' + alState.added + (alState.added === 1 ? ' photo' : ' photos'));
+  } catch (e) {}
+  $('alUse').style.pointerEvents = '';
+  alState.index++;
+  alLoadCurrent();
+}
+function alSkipPhoto() {
+  alState.index++;
+  alLoadCurrent();
+}
+async function alCloseAligner() {
+  if (alState.added > 0) {
+    const ok = await confirmSheet('Stop importing?', alState.added + (alState.added === 1 ? ' photo has' : ' photos have') + ' already been added and will be kept.', 'Stop');
+    if (!ok) return;
+  }
+  alFinish();
+}
+async function alFinish() {
+  if (alState.objUrl) { try { URL.revokeObjectURL(alState.objUrl); } catch (e) {} alState.objUrl = null; }
+  const pid = alState.projectId;
+  alState.projectId = null; alState.files = []; alState.pointers.clear(); alState.pinchStart = null;
+  if (pid) await openProject(pid);
+  renderHome();
+}
+
+let alPendingProjectId = null;
+async function beginImportForProject(projectId) {
+  alPendingProjectId = projectId;
+  $('alignFilesInput').click();
+}
+async function createProjectAndImport() {
+  const name = $('projName').value.trim() || 'Untitled project';
+  const p = { id: uid(), name, createdAt: Date.now(), updatedAt: Date.now(), reminder: 'off' };
+  await dbPutProject(p);
+  closeNewProjectModal();
+  state.projectId = p.id;
+  renderHome();
+  beginImportForProject(p.id);
+}
 
 let viewList = [], viewIndex = 0;
 function openPhotoViewAt(i) {
@@ -769,6 +964,7 @@ function wire() {
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
   $('newCancel').addEventListener('click', closeNewProjectModal);
   $('newCreate').addEventListener('click', createProject);
+  $('newImportBtn').addEventListener('click', createProjectAndImport);
   $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
   $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
   renderExamples();
@@ -781,6 +977,7 @@ function wire() {
 
   document.querySelectorAll('[data-nav="home"]').forEach(el => el.addEventListener('click', () => { show('home'); renderHome(); }));
   $('delProjectBtn').addEventListener('click', deleteCurrentProject);
+  $('importBtn').addEventListener('click', () => { if (state.projectId) beginImportForProject(state.projectId); });
   $('renameBtn').addEventListener('click', openRename);
   $('renCancel').addEventListener('click', () => $('renModal').classList.remove('on'));
   $('renSave').addEventListener('click', saveRename);
@@ -815,6 +1012,30 @@ function wire() {
     e.target.value = '';
   });
   $('libReset').addEventListener('click', resetOverlayToLast);
+
+  $('alignFilesInput').addEventListener('change', (e) => {
+    const files = e.target.files;
+    const pid = alPendingProjectId || state.projectId;
+    alPendingProjectId = null;
+    if (files && files.length && pid) startAligner(pid, files);
+    e.target.value = '';
+  });
+  $('alClose').addEventListener('click', alCloseAligner);
+  $('alSkip').addEventListener('click', alSkipPhoto);
+  $('alUse').addEventListener('click', alUsePhoto);
+  $('alGhostToggle').addEventListener('click', () => {
+    alState.ghostOn = !alState.ghostOn;
+    $('alGhostToggle').classList.toggle('act', alState.ghostOn);
+    $('alGhost').classList.toggle('on', alState.ghostOn && !!alState.ghostUrl);
+  });
+  $('alZoom').addEventListener('input', function () { alSetZoom(this.value); });
+  const alViewport = $('alViewport');
+  alViewport.addEventListener('pointerdown', alOnPointerDown);
+  alViewport.addEventListener('pointermove', alOnPointerMove);
+  alViewport.addEventListener('pointerup', alOnPointerUp);
+  alViewport.addEventListener('pointercancel', alOnPointerUp);
+  alViewport.addEventListener('pointerleave', alOnPointerUp);
+  alViewport.addEventListener('wheel', alOnWheel, { passive: false });
 
   $('photoViewClose').addEventListener('click', closePhotoView);
   $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
