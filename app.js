@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -138,6 +138,10 @@ function renderExamples() {
     '<button class="ex" data-name="' + escapeHtml(e.name) + '"><span class="ex-strip">' + strip(e.frames) + '</span>' +
     '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span></span></button>'
   ).join('');
+}
+function renderLandingDemo() {
+  const el = $('ldDemoStrip');
+  if (el) el.innerHTML = strip([plantIll(0.16), plantIll(0.55), plantIll(1)]);
 }
 
 const state = { screen: 'landing', projectId: null, overlayMode: 'photo' };
@@ -371,6 +375,11 @@ async function deleteCurrentProject() {
   renderHome();
 }
 
+function openProjectMore() {
+  $('moreTitle').textContent = $('projTitle').textContent || 'Project';
+  $('moreModal').classList.add('on');
+}
+function closeProjectMore() { $('moreModal').classList.remove('on'); }
 function openRename() {
   $('renName').value = $('projTitle').textContent;
   $('renModal').classList.add('on');
@@ -973,7 +982,7 @@ function renderRemOpts() {
   $('remOpts').innerHTML = remOptions.map(o => {
     const on = o === state._rem;
     return '<div class="optrow' + (on ? ' on' : '') + '" data-rem="' + o + '"><span class="nm">' + o + '</span>' +
-      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#0C6B50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
+      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--al-d)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
   }).join('');
 }
 async function openReminders() {
@@ -1047,6 +1056,7 @@ function wire() {
   $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
   $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
   renderExamples();
+  renderLandingDemo();
   $('exampleList').addEventListener('click', (e) => {
     const b = e.target.closest('[data-name]'); if (!b) return;
     $('projName').value = b.getAttribute('data-name');
@@ -1055,9 +1065,12 @@ function wire() {
   });
 
   document.querySelectorAll('[data-nav="home"]').forEach(el => el.addEventListener('click', () => { show('home'); renderHome(); }));
-  $('delProjectBtn').addEventListener('click', deleteCurrentProject);
-  $('importBtn').addEventListener('click', () => { if (state.projectId) beginImportForProject(state.projectId); });
-  $('renameBtn').addEventListener('click', openRename);
+  $('projMoreBtn').addEventListener('click', openProjectMore);
+  $('moreCancel').addEventListener('click', closeProjectMore);
+  $('moreModal').addEventListener('click', e => { if (e.target === $('moreModal')) closeProjectMore(); });
+  $('moreImport').addEventListener('click', () => { closeProjectMore(); if (state.projectId) beginImportForProject(state.projectId); });
+  $('moreRename').addEventListener('click', () => { closeProjectMore(); openRename(); });
+  $('moreDelete').addEventListener('click', () => { closeProjectMore(); deleteCurrentProject(); });
   $('renCancel').addEventListener('click', () => $('renModal').classList.remove('on'));
   $('renSave').addEventListener('click', saveRename);
   $('renName').addEventListener('keydown', e => { if (e.key === 'Enter') saveRename(); });
