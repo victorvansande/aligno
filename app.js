@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -923,29 +923,151 @@ function alBadge(text) {
 
 /* --- Align from library: import several existing photos and manually
    center the same subject in each one, so the set plays back stabilized. --- */
-const AL_OUT = 1000;
+const AL_OUT = 1080;
+const AL_SHAPES = [
+  { id: '1:1', ar: 1 },
+  { id: '4:5', ar: 4 / 5 },
+  { id: '9:16', ar: 9 / 16 }
+];
 const alState = {
   projectId: null, files: [], index: 0, added: 0,
-  scale: 1, tx: 0, ty: 0, base: { w: 1, h: 1 }, frame: 100,
+  scale: 1, rot: 0, tx: 0, ty: 0, base: { w: 1, h: 1 }, nat: { w: 1, h: 1 }, frame: { w: 100, h: 100 },
+  shape: '1:1', subjectFrac: 0,
   ghostOn: true, ghostUrl: null, objUrl: null, pointers: new Map(), pinchStart: null
 };
+try { const s = localStorage.getItem('aligno_al_shape'); if (AL_SHAPES.some(x => x.id === s)) alState.shape = s; } catch (e) {}
+function alShape() { return AL_SHAPES.find(x => x.id === alState.shape) || AL_SHAPES[0]; }
 
+/* Sizes the crop frame (and the ghost guide on top of it) for the chosen
+   output shape, as large as fits between the top bar and the controls. */
+function alLayoutFrame() {
+  const ar = alShape().ar;
+  const maxW = Math.min(window.innerWidth * 0.84, 520), maxH = window.innerHeight * 0.5;
+  let w = maxW, h = w / ar;
+  if (h > maxH) { h = maxH; w = h * ar; }
+  w = Math.round(w); h = Math.round(h);
+  ['alFrame', 'alGhost'].forEach(id => { $(id).style.width = w + 'px'; $(id).style.height = h + 'px'; });
+  alState.frame = { w, h };
+  $('alShapeLbl').textContent = alState.shape;
+}
+
+/* The photo may be dragged until its edge reaches the crosshair, so even a
+   subject near the border can be centered (uncovered area turns black). */
 function alClampPan() {
   const rw = alState.base.w * alState.scale, rh = alState.base.h * alState.scale;
-  const maxX = Math.max(0, (rw - alState.frame) / 2);
-  const maxY = Math.max(0, (rh - alState.frame) / 2);
+  const maxX = rw / 2, maxY = rh / 2;
   alState.tx = Math.max(-maxX, Math.min(maxX, alState.tx));
   alState.ty = Math.max(-maxY, Math.min(maxY, alState.ty));
 }
 function alRender() {
   alClampPan();
-  $('alImg').style.transform = 'translate(calc(-50% + ' + alState.tx + 'px), calc(-50% + ' + alState.ty + 'px)) scale(' + alState.scale + ')';
+  $('alImg').style.transform = 'translate(calc(-50% + ' + alState.tx + 'px), calc(-50% + ' + alState.ty + 'px)) rotate(' + alState.rot + 'rad) scale(' + alState.scale + ')';
+  const deg = Math.round(alState.rot * 180 / Math.PI);
+  $('alRotLbl').textContent = deg ? (deg > 0 ? '+' : '') + deg + '°' : '';
+  $('alRotLbl').style.display = deg ? 'block' : 'none';
 }
+/* Zoom goes up to 24× (a small moon in a wide shot); the slider is
+   logarithmic so the useful 1–3× range keeps fine control. */
+const AL_MAXZ = 24;
 function alSetZoom(v) {
-  alState.scale = Math.max(1, Math.min(4, Number(v)));
+  alState.scale = Math.max(1, Math.min(AL_MAXZ, Number(v)));
   alRender();
-  $('alZoom').value = alState.scale;
-  $('alZoomv').textContent = alState.scale.toFixed(1) + '×';
+  $('alZoom').value = Math.log(alState.scale) / Math.log(AL_MAXZ) * 100;
+  $('alZoomv').textContent = alState.scale.toFixed(alState.scale < 10 ? 1 : 0) + '×';
+}
+function alFit() {
+  const r = Math.max(alState.frame.w / alState.nat.w, alState.frame.h / alState.nat.h);
+  alState.base = { w: alState.nat.w * r, h: alState.nat.h * r };
+  const el = $('alImg');
+  el.style.width = alState.base.w + 'px';
+  el.style.height = alState.base.h + 'px';
+}
+function alReset() {
+  alState.scale = 1; alState.rot = 0; alState.tx = 0; alState.ty = 0;
+  alSetZoom(1);
+}
+function alCycleShape() {
+  const i = AL_SHAPES.findIndex(x => x.id === alState.shape);
+  alState.shape = AL_SHAPES[(i + 1) % AL_SHAPES.length].id;
+  try { localStorage.setItem('aligno_al_shape', alState.shape); } catch (e) {}
+  alLayoutFrame();
+  alFit();
+  alRender();
+  alBadge('Shape ' + alState.shape);
+}
+
+/* Auto-center: finds the largest bright region (the moon, a lamp, the sun…)
+   and moves it under the crosshair, sized like the subject in the previous
+   aligned photo. Plain thresholding — no AI, works best on dark backgrounds. */
+function alFindBrightSubject(img) {
+  const coarse = brightBlob(img, 0, 0, img.naturalWidth, img.naturalHeight, true);
+  if (!coarse) return null;
+  const half = coarse.r * 2.5;
+  const sx = Math.max(0, coarse.cx - half), sy = Math.max(0, coarse.cy - half);
+  const sw = Math.min(img.naturalWidth - sx, half * 2), sh = Math.min(img.naturalHeight - sy, half * 2);
+  if (sw * sh > img.naturalWidth * img.naturalHeight * 0.5) return coarse;
+  return brightBlob(img, sx, sy, sw, sh, false) || coarse;
+}
+/* Largest connected bright region inside a source rectangle, in image px. */
+function brightBlob(img, sx, sy, sw, sh, strict) {
+  const M = 256, k = Math.min(4, M / Math.max(sw, sh));
+  const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data;
+  const L = new Float32Array(w * h);
+  let max = 0, sum = 0;
+  for (let i = 0, p = 0; p < L.length; i += 4, p++) { const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; L[p] = v; sum += v; if (v > max) max = v; }
+  const mean = sum / L.length;
+  if (max - mean < 40) return null;
+  // Coarse pass: only the brightest quarter of the range, and regions are
+  // scored so a bright, compact, round blob beats a long lit horizon or a
+  // big region running off the edge of the photo.
+  const T = strict ? max - (max - mean) * 0.25 : mean + (max - mean) * 0.5;
+  const label = new Int32Array(w * h);
+  let best = null, cur = 0;
+  const stack = [];
+  for (let s = 0; s < L.length; s++) {
+    if (L[s] < T || label[s]) continue;
+    cur++;
+    let area = 0, ax = 0, ay = 0, lum = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+    stack.push(s); label[s] = cur;
+    while (stack.length) {
+      const q = stack.pop(), x = q % w, y = (q - x) / w;
+      area++; ax += x; ay += y; lum += L[q];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x > 0 && !label[q - 1] && L[q - 1] >= T) { label[q - 1] = cur; stack.push(q - 1); }
+      if (x < w - 1 && !label[q + 1] && L[q + 1] >= T) { label[q + 1] = cur; stack.push(q + 1); }
+      if (y > 0 && !label[q - w] && L[q - w] >= T) { label[q - w] = cur; stack.push(q - w); }
+      if (y < h - 1 && !label[q + w] && L[q + w] >= T) { label[q + w] = cur; stack.push(q + w); }
+    }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    const elong = Math.max(bw, bh) / Math.min(bw, bh);
+    const edge = strict && (x0 === 0 || y0 === 0 || x1 === w - 1 || y1 === h - 1) ? 0.15 : 1;
+    const score = area * Math.pow(lum / area / max, 6) * edge / (elong * elong);
+    if (!best || score > best.score) best = { score, area, cx: ax / area, cy: ay / area };
+  }
+  if (!best || best.area < 4 || (strict && best.area > L.length * 0.45)) return null;
+  return { cx: sx + (best.cx + 0.5) / k, cy: sy + (best.cy + 0.5) / k, r: Math.sqrt(best.area / Math.PI) / k };
+}
+function alAutoCenter() {
+  const img = $('alImg');
+  if (!img.naturalWidth) return;
+  const s = alFindBrightSubject(img);
+  if (!s) { alBadge('No clear bright subject found'); return; }
+  alState.autoSubject = s;
+  const fw = alState.frame.w;
+  const target = alState.subjectFrac || 0.4;
+  const perNat = alState.base.w / alState.nat.w;
+  alState.scale = Math.max(1, Math.min(AL_MAXZ, (target * fw) / (2 * s.r * perNat)));
+  const k = perNat * alState.scale;
+  const dx = (s.cx - alState.nat.w / 2) * k, dy = (s.cy - alState.nat.h / 2) * k;
+  const cos = Math.cos(alState.rot), sin = Math.sin(alState.rot);
+  alState.tx = -(dx * cos - dy * sin);
+  alState.ty = -(dx * sin + dy * cos);
+  alSetZoom(alState.scale);
+  alBadge('Centered the brightest subject');
 }
 
 function startAligner(projectId, fileList) {
@@ -958,8 +1080,10 @@ function startAligner(projectId, fileList) {
   alState.added = 0;
   alState.ghostUrl = null;
   alState.ghostOn = true;
+  alState.subjectFrac = 0;
   $('alGhostToggle').classList.add('act');
   show('aligner');
+  alLayoutFrame();
   alLoadCurrent();
 }
 
@@ -969,32 +1093,23 @@ async function alLoadCurrent() {
   $('alCount').textContent = (alState.index + 1) + ' of ' + alState.files.length;
   $('alHint').style.display = alState.index === 0 ? 'block' : 'none';
 
-  const frameEl = $('alFrame');
-  alState.frame = frameEl.getBoundingClientRect().width || 300;
-
   if (alState.objUrl) { try { URL.revokeObjectURL(alState.objUrl); } catch (e) {} }
   const url = URL.createObjectURL(f);
   alState.objUrl = url;
 
+  const el = $('alImg');
   const img = await new Promise((res, rej) => {
-    const im = new Image();
-    im.onload = () => res(im);
-    im.onerror = rej;
-    im.src = url;
+    el.onload = () => res(el);
+    el.onerror = rej;
+    el.src = url;
   }).catch(() => null);
 
   if (!img) { alSkipPhoto(); return; }
 
-  const r = Math.max(alState.frame / img.naturalWidth, alState.frame / img.naturalHeight);
-  alState.base = { w: img.naturalWidth * r, h: img.naturalHeight * r };
-  alState.scale = 1; alState.tx = 0; alState.ty = 0;
-
-  const el = $('alImg');
-  el.src = url;
-  el.style.width = alState.base.w + 'px';
-  el.style.height = alState.base.h + 'px';
-  $('alZoom').min = 1; $('alZoom').max = 4;
-  alSetZoom(1);
+  alState.nat = { w: el.naturalWidth, h: el.naturalHeight };
+  alState.autoSubject = null;
+  alFit();
+  alReset();
 
   const ghost = $('alGhost');
   if (alState.ghostUrl && alState.ghostOn) { ghost.src = alState.ghostUrl; ghost.classList.add('on'); }
@@ -1005,15 +1120,16 @@ async function alLoadCurrent() {
 }
 
 function alPointerPos(e) { return { x: e.clientX, y: e.clientY }; }
+function alPinchInfo() {
+  const pts = Array.from(alState.pointers.values());
+  return { dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), ang: Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x) };
+}
 function alOnPointerDown(e) {
-  $('alImg').setPointerCapture && $('alImg').setPointerCapture(e.pointerId);
+  $('alViewport').setPointerCapture && $('alViewport').setPointerCapture(e.pointerId);
   alState.pointers.set(e.pointerId, alPointerPos(e));
   if (alState.pointers.size === 2) {
-    const pts = Array.from(alState.pointers.values());
-    alState.pinchStart = {
-      dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
-      scale: alState.scale
-    };
+    const pi = alPinchInfo();
+    alState.pinchStart = { dist: pi.dist, ang: pi.ang, scale: alState.scale, rot: alState.rot };
   }
 }
 function alOnPointerMove(e) {
@@ -1022,9 +1138,12 @@ function alOnPointerMove(e) {
   const cur = alPointerPos(e);
   alState.pointers.set(e.pointerId, cur);
   if (alState.pointers.size >= 2 && alState.pinchStart) {
-    const pts = Array.from(alState.pointers.values());
-    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-    alSetZoom(alState.pinchStart.scale * (dist / alState.pinchStart.dist));
+    const pi = alPinchInfo();
+    let rot = alState.pinchStart.rot + (pi.ang - alState.pinchStart.ang);
+    const deg = rot * 180 / Math.PI;
+    if (Math.abs(deg - Math.round(deg / 90) * 90) < 2) rot = Math.round(deg / 90) * 90 * Math.PI / 180;
+    alState.rot = rot;
+    alSetZoom(alState.pinchStart.scale * (pi.dist / alState.pinchStart.dist));
   } else if (alState.pointers.size === 1) {
     alState.tx += cur.x - prev.x;
     alState.ty += cur.y - prev.y;
@@ -1037,20 +1156,32 @@ function alOnPointerUp(e) {
 }
 function alOnWheel(e) {
   e.preventDefault();
-  alSetZoom(alState.scale + (e.deltaY < 0 ? 0.08 : -0.08));
+  if (e.shiftKey) { alState.rot += (e.deltaY < 0 ? 1 : -1) * Math.PI / 180; alRender(); return; }
+  alSetZoom(alState.scale + (e.deltaY < 0 ? 0.08 : -0.08) * alState.scale);
 }
 
+/* Bakes the current pan/zoom/rotation into a fixed-size image: the frame
+   maps to the output canvas, and the photo is drawn with the same transform
+   it has on screen. */
 async function alBakeCurrent() {
-  const img = $('alImg'), frame = $('alFrame');
-  const fr = frame.getBoundingClientRect(), ir = img.getBoundingClientRect();
-  const s = AL_OUT / fr.width;
-  const c = document.createElement('canvas'); c.width = AL_OUT; c.height = AL_OUT;
+  const img = $('alImg');
+  const ar = alShape().ar;
+  const OW = ar >= 1 ? AL_OUT : Math.round(AL_OUT * ar), OH = ar >= 1 ? Math.round(AL_OUT / ar) : AL_OUT;
+  const k = OW / alState.frame.w;
+  const c = document.createElement('canvas'); c.width = OW; c.height = OH;
   const ctx = c.getContext('2d');
-  ctx.drawImage(img, (ir.left - fr.left) * s, (ir.top - fr.top) * s, ir.width * s, ir.height * s);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, OW, OH);
+  ctx.translate(OW / 2 + alState.tx * k, OH / 2 + alState.ty * k);
+  ctx.rotate(alState.rot);
+  const dw = alState.base.w * alState.scale * k, dh = alState.base.h * alState.scale * k;
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
   const blob = await toBlobP(c, 'image/jpeg', 0.92);
-  const tc = document.createElement('canvas'); tc.width = 320; tc.height = 320;
-  tc.getContext('2d').drawImage(c, 0, 0, 320, 320);
+  const tw = 320, th = Math.round(tw * OH / OW);
+  const tc = document.createElement('canvas'); tc.width = tw; tc.height = th;
+  tc.getContext('2d').drawImage(c, 0, 0, tw, th);
   const thumb = await toBlobP(tc, 'image/jpeg', 0.7);
+  const s = alState.autoSubject;
+  if (s) alState.subjectFrac = (2 * s.r * (alState.base.w / alState.nat.w) * alState.scale) / alState.frame.w;
   return { blob, thumb, dataUrl: c.toDataURL('image/jpeg', 0.8) };
 }
 
@@ -1818,7 +1949,14 @@ function wire() {
     $('alGhostToggle').classList.toggle('act', alState.ghostOn);
     $('alGhost').classList.toggle('on', alState.ghostOn && !!alState.ghostUrl);
   });
-  $('alZoom').addEventListener('input', function () { alSetZoom(this.value); });
+  $('alZoom').addEventListener('input', function () { alSetZoom(Math.pow(AL_MAXZ, this.value / 100)); });
+  $('alShapeBtn').addEventListener('click', alCycleShape);
+  $('alAuto').addEventListener('click', alAutoCenter);
+  $('alResetBtn').addEventListener('click', alReset);
+  window.addEventListener('resize', () => {
+    if (state.screen !== 'aligner') return;
+    alLayoutFrame(); alFit(); alRender();
+  });
   const alViewport = $('alViewport');
   alViewport.addEventListener('pointerdown', alOnPointerDown);
   alViewport.addEventListener('pointermove', alOnPointerMove);

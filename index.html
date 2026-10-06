@@ -418,6 +418,13 @@
   .al-frame{ position:absolute; top:50%; left:50%; width:min(80vw,46vh); height:min(80vw,46vh);
     transform:translate(-50%,-50%); z-index:3; pointer-events:none; border-radius:4px;
     border:1.5px solid rgba(255,255,255,.85); box-shadow:0 0 0 2000px rgba(0,0,0,.55); }
+  .al-shape span{ font-size:12px; font-weight:700; letter-spacing:-.01em; }
+  .al-tools{ display:flex; justify-content:center; gap:10px; margin-bottom:12px; }
+  .al-tool{ border:none; color:#fff; border-radius:20px; padding:9px 15px; font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:7px; }
+  .al-tool:active{ transform:scale(.96); }
+  .al-rot{ position:absolute; top:calc(env(safe-area-inset-top) + 112px); left:50%; transform:translateX(-50%); z-index:5;
+    font-size:12px; font-weight:600; color:#fff; padding:5px 11px; border-radius:14px; background:rgba(0,0,0,.45); display:none; }
   .al-cross{ position:absolute; top:50%; left:50%; width:24px; height:24px; transform:translate(-50%,-50%);
     z-index:4; pointer-events:none; }
   .al-cross::before,.al-cross::after{ content:""; position:absolute; background:rgba(255,255,255,.92);
@@ -717,14 +724,22 @@
     <div class="cam-top">
       <button class="ciconbtn glass" id="alClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <span class="nm" id="alCount">Align</span>
+      <span style="display:flex; gap:8px">
+      <button class="ciconbtn glass al-shape" id="alShapeBtn" aria-label="Change output shape"><span id="alShapeLbl">1:1</span></button>
       <button class="ciconbtn glass" id="alGhostToggle" aria-label="Toggle guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></button>
+      </span>
     </div>
+    <div class="al-rot" id="alRotLbl"></div>
     <div class="cbadge" id="alBadge"></div>
-    <div class="camhint glass" id="alHint">Drag the photo so your subject sits under the crosshair. Pinch or use the slider to zoom.</div>
+    <div class="camhint glass" id="alHint">Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate — or tap Auto-center for the moon and other bright subjects.</div>
     <div class="cam-panel">
+      <div class="al-tools">
+        <button class="al-tool glass" id="alAuto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Auto-center</button>
+        <button class="al-tool glass" id="alResetBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
+      </div>
       <div class="cam-slwrap glass">
         <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
-        <input type="range" id="alZoom" min="1" max="4" step="0.01" value="1">
+        <input type="range" id="alZoom" min="0" max="100" step="0.1" value="0">
         <span class="val" id="alZoomv">1.0×</span>
       </div>
       <div class="cam-controls">
