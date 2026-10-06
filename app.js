@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -224,6 +224,7 @@ async function renderHome() {
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
   list.innerHTML = cards.join('');
+  setDueBadge(cards.filter(c => c.indexOf('class="duechip"') >= 0).length);
   list.querySelectorAll('.pswipe').forEach(wireSwipeCard);
   list.querySelectorAll('[data-del]').forEach(el => {
     el.addEventListener('click', () => deleteProjectFromHome(el.getAttribute('data-del')));
@@ -1070,10 +1071,51 @@ function alAutoCenter() {
   alBadge('Centered the brightest subject');
 }
 
-function startAligner(projectId, fileList) {
+/* Reads when a JPEG was actually taken (EXIF DateTimeOriginal), so imported
+   and shared photos land at the right spot in the timeline even when the
+   file's own date is the day it was copied or shared. */
+async function exifTime(file) {
+  try {
+    const buf = new DataView(await file.slice(0, 196608).arrayBuffer());
+    if (buf.getUint16(0) !== 0xFFD8) return 0;
+    let p = 2;
+    while (p + 4 < buf.byteLength) {
+      const marker = buf.getUint16(p), len = buf.getUint16(p + 2);
+      if (marker === 0xFFE1 && buf.getUint32(p + 4) === 0x45786966) {
+        const t = p + 10, le = buf.getUint16(t) === 0x4949;
+        const u16 = (o) => buf.getUint16(t + o, le), u32 = (o) => buf.getUint32(t + o, le);
+        const readIfd = (off) => {
+          const out = {}, n = u16(off);
+          for (let i = 0; i < n; i++) {
+            const e = off + 2 + i * 12, tag = u16(e), cnt = u32(e + 4);
+            if (tag === 0x8769) out.exif = u32(e + 8);
+            else if ((tag === 0x9003 || tag === 0x0132) && cnt >= 19) {
+              let s = ''; const vo = u32(e + 8);
+              for (let k = 0; k < 19; k++) s += String.fromCharCode(buf.getUint8(t + vo + k));
+              out[tag] = s;
+            }
+          }
+          return out;
+        };
+        const ifd0 = readIfd(u32(4));
+        const sub = ifd0.exif ? readIfd(ifd0.exif) : {};
+        const s = sub[0x9003] || ifd0[0x0132];
+        const m = s && s.match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
+        if (!m || m[1] === '0000') return 0;
+        return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() || 0;
+      }
+      if ((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
+      p += 2 + len;
+    }
+  } catch (e) {}
+  return 0;
+}
+
+async function startAligner(projectId, fileList) {
   const files = Array.from(fileList || []).filter(f => f && f.type && f.type.indexOf('image/') === 0);
   if (!files.length || !projectId) return;
-  files.sort((a, b) => (a.lastModified || 0) - (b.lastModified || 0));
+  await Promise.all(files.map(async f => { f._ts = (await exifTime(f)) || f.lastModified || Date.now(); }));
+  files.sort((a, b) => a._ts - b._ts);
   alState.projectId = projectId;
   alState.files = files;
   alState.index = 0;
@@ -1191,7 +1233,7 @@ async function alUsePhoto() {
   $('alUse').style.pointerEvents = 'none';
   try {
     const baked = await alBakeCurrent();
-    const ts = f.lastModified || Date.now();
+    const ts = f._ts || f.lastModified || Date.now();
     const ph = { id: uid(), projectId: alState.projectId, ts, blob: baked.blob, thumb: baked.thumb, src: 'import' };
     await dbAddPhoto(ph);
     const p = await dbGetProject(alState.projectId);
@@ -1562,7 +1604,7 @@ async function openReminders() {
   const cur = (p && p.reminder) ? p.reminder : 'Off';
   state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Off';
   renderRemOpts();
-  $('remNote').textContent = 'You’ll see a “Due” badge on the project when it’s time for the next photo. Push notifications at a fixed time will come with the native app version.';
+  $('remNote').textContent = 'When it’s time for the next photo, the project gets a “Due” badge. If you’ve installed Aligno on Android, you’ll also get a notification (your phone decides the exact moment, usually within a few hours).';
   show('reminders');
 }
 async function saveReminder() {
@@ -1573,6 +1615,7 @@ async function saveReminder() {
     if (p.reminder !== 'Off' && 'Notification' in window && Notification.permission === 'default') {
       try { await Notification.requestPermission(); } catch (e) {}
     }
+    syncReminderJobs();
   }
   openProject(state.projectId);
   renderHome();
@@ -1851,6 +1894,87 @@ function renderBackupInfo() {
   $('backupSub').textContent = last ? 'Last backup ' + fmtAgo(last) : 'Not backed up yet';
 }
 
+/* --- Launch handling: app-icon shortcuts, notification taps and photos
+   shared into Aligno from the gallery. --- */
+let sharedFiles = [];
+async function takeSharedFiles() {
+  try {
+    const c = await caches.open('aligno-share');
+    const cnt = await c.match('./shared/count');
+    const n = cnt ? +(await cnt.text()) : 0;
+    const files = [];
+    for (let i = 0; i < n; i++) {
+      const r = await c.match('./shared/' + i);
+      if (!r) continue;
+      const b = await r.blob();
+      files.push(new File([b], decodeURIComponent(r.headers.get('X-Name') || 'photo-' + i), { type: b.type || 'image/jpeg', lastModified: +r.headers.get('X-Modified') || Date.now() }));
+    }
+    await caches.delete('aligno-share');
+    return files;
+  } catch (e) { return []; }
+}
+async function openSharePicker(files) {
+  sharedFiles = files;
+  const n = files.length;
+  $('shareTitle').textContent = 'Add ' + n + (n === 1 ? ' photo' : ' photos');
+  const projects = (await dbProjects()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const rows = await Promise.all(projects.map(async p => {
+    const photos = await photosOf(p);
+    const last = photos[photos.length - 1];
+    return '<button class="share-pick" data-pid="' + p.id + '">' + (last ? '<img src="' + urlFor(last, 'thumb') + '" alt="">' : '<i class="ph"></i>') +
+      '<span style="flex:1; min-width:0"><b>' + escapeHtml(p.name) + '</b><span>' + photos.length + (photos.length === 1 ? ' photo' : ' photos') + '</span></span></button>';
+  }));
+  $('shareList').innerHTML = rows.join('');
+  $('shareName').value = '';
+  $('shareModal').classList.add('on');
+}
+async function handleLaunch() {
+  const q = new URLSearchParams(location.search);
+  if (!q.toString()) return;
+  try { history.replaceState(history.state, '', location.pathname); } catch (e) {}
+  try { localStorage.setItem('aligno_seen', '1'); } catch (e) {}
+  if (q.get('share')) {
+    const files = await takeSharedFiles();
+    show('home');
+    if (files.length) openSharePicker(files);
+    return;
+  }
+  const pid = q.get('project');
+  if (pid && await dbGetProject(pid)) { show('home'); await openProject(pid); return; }
+  const action = q.get('action');
+  if (action === 'new') { show('home'); openNewProjectModal(false); return; }
+  if (action === 'camera') {
+    const projects = (await dbProjects()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    show('home');
+    if (projects[0]) { await openProject(projects[0].id); openCamera(); }
+    else openNewProjectModal(true);
+  }
+}
+
+/* Reminder notifications: register a periodic background sync while any
+   project has a reminder (Android, installed app); the service worker does
+   the actual check. The app icon also gets a badge with the due count. */
+async function syncReminderJobs() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg || !reg.periodicSync) return;
+    const any = (await dbProjects()).some(p => reminderInterval(p) > 0);
+    if (any) {
+      const st = await navigator.permissions.query({ name: 'periodic-background-sync' }).catch(() => null);
+      if (st && st.state === 'granted') await reg.periodicSync.register('aligno-due', { minInterval: 12 * 3600 * 1000 });
+    } else {
+      await reg.periodicSync.unregister('aligno-due');
+    }
+  } catch (e) {}
+}
+function setDueBadge(n) {
+  try {
+    if (!navigator.setAppBadge) return;
+    if (n) navigator.setAppBadge(n).catch(() => {}); else navigator.clearAppBadge().catch(() => {});
+  } catch (e) {}
+}
+
 function askPersistentStorage() {
   try {
     if (navigator.storage && navigator.storage.persist) {
@@ -2033,6 +2157,32 @@ function wire() {
   wireCompare();
   wireHistory();
 
+  $('shareCancel').addEventListener('click', () => { $('shareModal').classList.remove('on'); sharedFiles = []; });
+  $('shareModal').addEventListener('click', e => { if (e.target === $('shareModal')) { $('shareModal').classList.remove('on'); sharedFiles = []; } });
+  $('shareList').addEventListener('click', e => {
+    const b = e.target.closest('[data-pid]'); if (!b) return;
+    const files = sharedFiles; sharedFiles = [];
+    $('shareModal').classList.remove('on');
+    state.projectId = b.getAttribute('data-pid');
+    startAligner(state.projectId, files);
+  });
+  const shareCreate = async () => {
+    const files = sharedFiles; sharedFiles = [];
+    const p = { id: uid(), name: $('shareName').value.trim() || 'Untitled project', createdAt: Date.now(), updatedAt: Date.now(), reminder: 'off' };
+    await dbPutProject(p);
+    $('shareModal').classList.remove('on');
+    state.projectId = p.id;
+    startAligner(p.id, files);
+  };
+  $('shareCreate').addEventListener('click', shareCreate);
+  $('shareName').addEventListener('keydown', e => { if (e.key === 'Enter') shareCreate(); });
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', async e => {
+      const pid = e.data && e.data.open;
+      if (pid && await dbGetProject(pid)) openProject(pid); else { show('home'); renderHome(); }
+    });
+  }
+
   syncThemeSeg();
   $('themeSeg').addEventListener('click', e => {
     const b = e.target.closest('[data-theme-opt]'); if (b) applyThemePref(b.getAttribute('data-theme-opt'));
@@ -2059,8 +2209,9 @@ function wire() {
     let seen = false; try { seen = !!localStorage.getItem('aligno_seen'); } catch (e) {}
     if (seen) show('home'); else setTheme(false);
     askPersistentStorage();
+    await handleLaunch();
     if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
-      navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => { watchUpdates(reg); syncReminderJobs(); }).catch(() => {});
     }
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
