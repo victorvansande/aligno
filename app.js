@@ -1,6 +1,6 @@
-'use strict';
+﻿'use strict';
 
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -134,7 +134,7 @@ const EXAMPLES = [
   { name: 'Growing up', label: 'A child', desc: 'watch them grow', frames: [personIll(0.25), personIll(0.6), personIll(1)] }
 ];
 function strip(frames) {
-  return frames.map((f, j) => (j ? '<span class="ex-ar">›</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
+  return frames.map((f, j) => (j ? '<span class="ex-ar">â€º</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
 }
 function renderExamples() {
   const el = $('exampleList');
@@ -199,7 +199,7 @@ async function renderHome() {
       '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
       '<div class="pcard" data-open="' + p.id + '">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
-      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
+      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' Â· ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
   list.innerHTML = cards.join('');
@@ -270,7 +270,7 @@ function wireSwipeCard(wrap) {
 }
 async function deleteProjectFromHome(id) {
   const p = await dbGetProject(id);
-  const ok = await confirmSheet('Delete “' + ((p && p.name) || 'this project') + '”?', 'All its photos will be permanently removed from this device.', 'Delete project');
+  const ok = await confirmSheet('Delete â€œ' + ((p && p.name) || 'this project') + 'â€?', 'All its photos will be permanently removed from this device.', 'Delete project');
   if (!ok) { closeOtherSwipes(null); return; }
   const photos = p ? await photosOf(p) : [];
   for (const ph of photos) {
@@ -296,13 +296,13 @@ async function openProject(id) {
   $('dueBanner').innerHTML = isDue(p, last)
     ? '<div class="due-banner" id="dueGo">' +
       '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
-      '<span><b>Photo due.</b> Keep the series going — take the next shot.</span>' +
+      '<span><b>Photo due.</b> Keep the series going â€” take the next shot.</span>' +
       '<span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>'
     : '';
   const dueGo = $('dueGo');
   if (dueGo) dueGo.addEventListener('click', openCamera);
 
-  $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
+  $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' Â· chronological');
   renderProjectHero(photos);
   const grid = $('photoGrid');
   const empty = $('projEmpty');
@@ -332,7 +332,120 @@ function renderProjectHero(photos) {
     '<div class="stat"><b>' + photos.length + '</b><span>photos</span></div>' +
     '<div class="stat"><b>' + days + '</b><span>' + (days === 1 ? 'day' : 'days') + '</span></div>' +
     '<div class="stat"><b>' + fmtDate(last.ts) + '</b><span>latest</span></div>' +
-    '</div></div>';
+    '</div>' +
+    '<button class="hero-cmp" id="heroCmp"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 4v16"/><path d="M8 10l-2 2 2 2M16 10l2 2-2 2"/></svg>Compare before &amp; after</button>' +
+    '</div>';
+  $('heroCmp').addEventListener('click', () => openCompare(0, photos.length - 1));
+  hero.querySelector('.hero-row').addEventListener('click', () => openCompare(0, photos.length - 1));
+}
+
+/* --- Before/after compare: drag a divider across two photos of the series. --- */
+const cmp = { a: 0, b: 0, slot: 'a', pos: 0.5, list: [], dragging: false };
+function openCompare(a, b) {
+  cmp.list = projPhotos.slice();
+  if (cmp.list.length < 2) return;
+  cmp.a = a; cmp.b = b; cmp.slot = 'b'; cmp.pos = 0.5;
+  $('cmpStrip').innerHTML = cmp.list.map((ph, i) =>
+    '<button class="cmp-th" data-ci="' + i + '"><img src="' + urlFor(ph, 'thumb') + '" alt=""><i class="ia">A</i><i class="ib">B</i></button>'
+  ).join('');
+  $('cmpView').classList.add('on');
+  setTheme(true);
+  cmpRender();
+  const sel = $('cmpStrip').querySelector('.cmp-th.b');
+  if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+function closeCompare() {
+  $('cmpView').classList.remove('on');
+  setTheme(state.screen === 'camera' || state.screen === 'aligner');
+}
+function cmpFit() {
+  const A = $('cmpA'), area = $('cmpArea'), st = $('cmpStage');
+  const ar = (A.naturalWidth && A.naturalHeight) ? A.naturalWidth / A.naturalHeight : 3 / 4;
+  const aw = area.clientWidth - 24, ah = area.clientHeight - 8;
+  let w = aw, h = w / ar;
+  if (h > ah) { h = ah; w = h * ar; }
+  st.style.width = Math.max(50, Math.round(w)) + 'px';
+  st.style.height = Math.max(50, Math.round(h)) + 'px';
+}
+function cmpSetPos(p) {
+  cmp.pos = Math.max(0, Math.min(1, p));
+  $('cmpB').style.clipPath = 'inset(0 0 0 ' + (cmp.pos * 100) + '%)';
+  $('cmpLine').style.left = (cmp.pos * 100) + '%';
+}
+function cmpRender() {
+  const A = cmp.list[cmp.a], B = cmp.list[cmp.b];
+  const imA = $('cmpA');
+  imA.onload = cmpFit;
+  imA.src = urlFor(A, 'full');
+  $('cmpB').src = urlFor(B, 'full');
+  if (imA.complete) cmpFit();
+  $('cmpTagA').textContent = fmtDate(A.ts);
+  $('cmpTagB').textContent = fmtDate(B.ts);
+  $('cmpSegA').textContent = fmtDate(A.ts);
+  $('cmpSegB').textContent = fmtDate(B.ts);
+  $('cmpSeg').querySelectorAll('[data-slot]').forEach(x => x.classList.toggle('on', x.getAttribute('data-slot') === cmp.slot));
+  $('cmpStrip').querySelectorAll('.cmp-th').forEach(t => {
+    const i = +t.getAttribute('data-ci');
+    t.classList.toggle('a', i === cmp.a);
+    t.classList.toggle('b', i === cmp.b);
+  });
+  cmpSetPos(cmp.pos);
+}
+function cmpPointer(e) {
+  const r = $('cmpStage').getBoundingClientRect();
+  cmpSetPos((e.clientX - r.left) / r.width);
+}
+async function shareCompare() {
+  const A = cmp.list[cmp.a], B = cmp.list[cmp.b];
+  if (!A || !B) return;
+  try {
+    const [ia, ib] = await Promise.all([loadImage(urlFor(A, 'full')), loadImage(urlFor(B, 'full'))]);
+    const half = 720, ar = ia.naturalWidth / ia.naturalHeight || 0.75;
+    const H = Math.round(Math.min(1280, half / ar)), gap = 8;
+    const c = document.createElement('canvas'); c.width = half * 2 + gap; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, H);
+    const drawHalf = (im, x) => {
+      ctx.save(); ctx.beginPath(); ctx.rect(x, 0, half, H); ctx.clip();
+      ctx.translate(x, 0); drawCover(ctx, im, half, H); ctx.restore();
+    };
+    drawHalf(ia, 0); drawHalf(ib, half + gap);
+    const tag = (txt, x) => {
+      ctx.font = '600 26px -apple-system, "Segoe UI", Roboto, sans-serif';
+      const w = ctx.measureText(txt).width + 32;
+      ctx.fillStyle = 'rgba(10,10,14,.6)';
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x + 20, H - 70, w, 46, 23); ctx.fill(); } else ctx.fillRect(x + 20, H - 70, w, 46);
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x + 36, H - 47);
+    };
+    tag(fmtDate(A.ts), 0); tag(fmtDate(B.ts), half + gap);
+    const blob = await toBlobP(c, 'image/jpeg', 0.9);
+    const name = fileSafe($('projTitle').textContent) + '-before-after.jpg';
+    const file = new File([blob], name, { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Before & after' }).catch(() => {});
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+  } catch (e) {}
+}
+function wireCompare() {
+  const st = $('cmpStage');
+  st.addEventListener('pointerdown', e => { cmp.dragging = true; st.setPointerCapture && st.setPointerCapture(e.pointerId); cmpPointer(e); });
+  st.addEventListener('pointermove', e => { if (cmp.dragging) cmpPointer(e); });
+  ['pointerup', 'pointercancel'].forEach(t => st.addEventListener(t, () => { cmp.dragging = false; }));
+  $('cmpClose').addEventListener('click', closeCompare);
+  $('cmpShare').addEventListener('click', shareCompare);
+  $('cmpSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-slot]'); if (!b) return;
+    cmp.slot = b.getAttribute('data-slot'); cmpRender();
+  });
+  $('cmpStrip').addEventListener('click', e => {
+    const t = e.target.closest('[data-ci]'); if (!t) return;
+    cmp[cmp.slot] = +t.getAttribute('data-ci'); cmpRender();
+  });
+  window.addEventListener('resize', () => { if ($('cmpView').classList.contains('on')) cmpFit(); });
 }
 
 let newProjectAfterCreate = false;
@@ -526,7 +639,7 @@ async function applyOverlay() {
   ov.classList.toggle('diff', state.overlayMode === 'diff');
   if (state.overlayMode === 'edges') {
     if (!overlayEdge) {
-      $('omEdges').textContent = 'Working…';
+      $('omEdges').textContent = 'Workingâ€¦';
       try { overlayEdge = await computeEdges(overlayRaw); }
       catch (e) { overlayEdge = overlayRaw; }
       $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges';
@@ -582,7 +695,7 @@ function setupZoom() {
     let cur = caps.zoom.min;
     try { const s = track.getSettings(); if (typeof s.zoom === 'number') cur = s.zoom; } catch (e) {}
     z.value = cur;
-    $('zoomv').textContent = Number(cur).toFixed(1) + '×';
+    $('zoomv').textContent = Number(cur).toFixed(1) + 'Ã—';
     row.style.display = 'flex';
   } else {
     row.style.display = 'none';
@@ -591,7 +704,7 @@ function setupZoom() {
 async function applyZoom(v) {
   if (!zoomTrack) return;
   try { await zoomTrack.applyConstraints({ advanced: [{ zoom: Number(v) }] }); } catch (e) {}
-  $('zoomv').textContent = Number(v).toFixed(1) + '×';
+  $('zoomv').textContent = Number(v).toFixed(1) + 'Ã—';
 }
 
 async function startCamera() {
@@ -660,7 +773,7 @@ async function capturePhoto() {
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
   setOverlay(urlFor(ph, 'full'));
-  camBadge('Photo ' + count + ' saved — now aligned to this');
+  camBadge('Photo ' + count + ' saved â€” now aligned to this');
 }
 
 function camBadge(text) {
@@ -704,7 +817,7 @@ function alSetZoom(v) {
   alState.scale = Math.max(1, Math.min(4, Number(v)));
   alRender();
   $('alZoom').value = alState.scale;
-  $('alZoomv').textContent = alState.scale.toFixed(1) + '×';
+  $('alZoomv').textContent = alState.scale.toFixed(1) + 'Ã—';
 }
 
 function startAligner(projectId, fileList) {
@@ -873,7 +986,7 @@ function openPhotoViewAt(i) {
   viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
   const ph = viewList[viewIndex];
   $('photoViewImg').src = urlFor(ph, 'full');
-  $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
+  $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' Â· ' + fmtFullDate(ph.ts) +
     ' <span class="pv-src">' + srcIcon(ph) + srcLabel(ph) + '</span>';
   $('pvPrev').style.visibility = viewIndex > 0 ? 'visible' : 'hidden';
   $('pvNext').style.visibility = viewIndex < viewList.length - 1 ? 'visible' : 'hidden';
@@ -913,8 +1026,8 @@ async function openExport() {
   expName = p.name;
   const n = expPhotos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
-    : n === 1 ? '1 photo — add at least one more to make a GIF'
-    : n + ' photos · preview';
+    : n === 1 ? '1 photo â€” add at least one more to make a GIF'
+    : n + ' photos Â· preview';
   $('gifResult').innerHTML = '';
   const btn = $('makeGifBtn');
   btn.disabled = n < 2;
@@ -954,8 +1067,8 @@ async function makeGif() {
   if (expPhotos.length < 2) return;
   const btn = $('makeGifBtn');
   const res = $('gifResult');
-  btn.disabled = true; btn.textContent = 'Working…';
-  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIF…</p>';
+  btn.disabled = true; btn.textContent = 'Workingâ€¦';
+  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIFâ€¦</p>';
   try {
     const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
     const first = await loadImage(urlFor(expPhotos[0], 'full'));
@@ -995,7 +1108,7 @@ async function makeGif() {
     res.appendChild(row);
     btn.disabled = false; btn.textContent = 'Make again';
   } catch (e) {
-    res.innerHTML = '<p class="note">Couldn’t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
+    res.innerHTML = '<p class="note">Couldnâ€™t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
     btn.disabled = false; btn.textContent = 'Make GIF';
   }
 }
@@ -1013,7 +1126,7 @@ async function openReminders() {
   const cur = (p && p.reminder) ? p.reminder : 'Off';
   state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Off';
   renderRemOpts();
-  $('remNote').textContent = 'You’ll see a “Due” badge on the project when it’s time for the next photo. Push notifications at a fixed time will come with the native app version.';
+  $('remNote').textContent = 'Youâ€™ll see a â€œDueâ€ badge on the project when itâ€™s time for the next photo. Push notifications at a fixed time will come with the native app version.';
   show('reminders');
 }
 async function saveReminder() {
@@ -1042,7 +1155,7 @@ async function openSettings() {
   const mb = bytes / 1048576;
   const mbLabel = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1);
   $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(count, 'photos') + statCard(mbLabel, 'MB used');
-  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' · web preview';
+  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' Â· web preview';
   show('settings');
 }
 
@@ -1077,7 +1190,7 @@ let skipPop = false;
 function seenIntro() { try { return !!localStorage.getItem('aligno_seen'); } catch (e) { return false; } }
 function openSheet() { return document.querySelector('.modal-bg.on'); }
 function isRoot() {
-  if (openSheet() || $('photoView').classList.contains('on')) return false;
+  if (openSheet() || $('photoView').classList.contains('on') || $('cmpView').classList.contains('on')) return false;
   return state.screen === 'home' || (state.screen === 'landing' && !seenIntro());
 }
 function syncHistory() {
@@ -1091,6 +1204,7 @@ function goBack() {
   const sheet = openSheet();
   if (sheet) { sheet.classList.remove('on'); closeOtherSwipes(null); return; }
   if ($('photoView').classList.contains('on')) { closePhotoView(); return; }
+  if ($('cmpView').classList.contains('on')) { closeCompare(); return; }
   switch (state.screen) {
     case 'camera': case 'reminders': openProject(state.projectId); break;
     case 'export': clearInterval(expTimer); openProject(state.projectId); break;
@@ -1106,7 +1220,7 @@ function wireHistory() {
     setTimeout(syncHistory, 0);
   });
   const mo = new MutationObserver(() => Promise.resolve().then(syncHistory));
-  document.querySelectorAll('.modal-bg, .photoview').forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class'] }));
+  document.querySelectorAll('.modal-bg, .photoview, .cmpview').forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class'] }));
   document.addEventListener('keydown', e => {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.key !== 'Escape') return;
     const pv = $('photoView').classList.contains('on');
@@ -1267,6 +1381,7 @@ function wire() {
     if (document.hidden) stopCamera();
     else if (!stream) startCamera();
   });
+  wireCompare();
   wireHistory();
 
   let deferred = null;
@@ -1289,6 +1404,6 @@ function wire() {
       navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {});
     }
   } catch (e) {
-    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
+    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldnâ€™t start the app: ' + (e && e.message) + '</div>';
   }
 })();
