@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -87,11 +87,15 @@ function fmtAgo(ts) {
   if (d < 7) return d + ' days ago';
   if (d < 14) return '1 week ago';
   if (d < 60) return Math.floor(d / 7) + ' weeks ago';
-  return Math.floor(d / 30) + ' months ago';
+  if (d < 365) return Math.floor(d / 30) + ' months ago';
+  const y = Math.floor(d / 365);
+  return y === 1 ? '1 year ago' : y + ' years ago';
 }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDate(ts) {
   const dt = new Date(ts);
-  return dt.getDate() + '/' + (dt.getMonth() + 1);
+  const s = MONTHS[dt.getMonth()] + ' ' + dt.getDate();
+  return dt.getFullYear() === new Date().getFullYear() ? s : s + " '" + String(dt.getFullYear()).slice(2);
 }
 function fmtFullDate(ts) {
   try { return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
@@ -160,6 +164,7 @@ function show(name) {
   });
   state.screen = name;
   setTheme(name === 'camera' || name === 'aligner');
+  if (typeof syncHistory === 'function' && $('photoView')) syncHistory();
 }
 
 function reminderInterval(p) {
@@ -207,7 +212,12 @@ async function renderHome() {
 const SWIPE_W = 84;
 function closeOtherSwipes(except) {
   document.querySelectorAll('.pswipe').forEach(w => {
-    if (w !== except && w._swOpen) { w._swOpen = false; const c = w.querySelector('.pcard'); c.style.transition = 'transform .2s ease'; c.style.transform = 'translateX(0)'; }
+    if (w !== except && w._swOpen) {
+      w._swOpen = false;
+      const c = w.querySelector('.pcard');
+      c.style.transition = 'transform .2s ease'; c.style.transform = 'translateX(0)';
+      setTimeout(() => { if (!w._swOpen) w.classList.remove('sw'); }, 220);
+    }
   });
 }
 function wireSwipeCard(wrap) {
@@ -217,12 +227,13 @@ function wireSwipeCard(wrap) {
   wrap._swOpen = false;
   function setX(x, animate) {
     card.style.transition = animate ? 'transform .2s ease' : 'none';
+    clearTimeout(card._clrT);
     if (x === 0) {
       card.style.transform = '';
-      clearTimeout(card._clrT);
-      if (animate) card._clrT = setTimeout(() => { card.style.transition = ''; }, 220);
-      else card.style.transition = '';
+      if (animate) card._clrT = setTimeout(() => { card.style.transition = ''; wrap.classList.remove('sw'); }, 220);
+      else { card.style.transition = ''; wrap.classList.remove('sw'); }
     } else {
+      wrap.classList.add('sw');
       card.style.transform = 'translateX(' + x + 'px)';
     }
   }
@@ -645,6 +656,7 @@ async function capturePhoto() {
   await dbAddPhoto(ph);
   p.updatedAt = Date.now();
   await dbPutProject(p);
+  askPersistentStorage();
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
   setOverlay(urlFor(ph, 'full'));
@@ -892,12 +904,13 @@ async function deleteViewedPhoto() {
   openPhotoViewAt(Math.min(oldIndex, viewList.length - 1));
 }
 
-let expFps = 3, expTimer = null, expPhotos = [];
+let expFps = 3, expTimer = null, expPhotos = [], expName = 'aligno';
 
 async function openExport() {
   const p = await dbGetProject(state.projectId);
   if (!p) return;
   expPhotos = await photosOf(p);
+  expName = p.name;
   const n = expPhotos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
     : n === 1 ? '1 photo — add at least one more to make a GIF'
@@ -923,8 +936,18 @@ async function loadImage(src) {
 let gifencMod = null;
 async function loadGifenc() {
   if (gifencMod) return gifencMod;
-  gifencMod = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm');
+  gifencMod = await import('./gifenc.js');
   return gifencMod;
+}
+
+function drawCover(ctx, im, W, H) {
+  const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const r = Math.max(W / iw, H / ih);
+  const dw = iw * r, dh = ih * r;
+  ctx.drawImage(im, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+function fileSafe(name) {
+  return String(name || '').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').toLowerCase() || 'aligno';
 }
 
 async function makeGif() {
@@ -944,7 +967,7 @@ async function makeGif() {
     for (const ph of expPhotos) {
       const im = await loadImage(urlFor(ph, 'full'));
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-      ctx.drawImage(im, 0, 0, W, H);
+      drawCover(ctx, im, W, H);
       const data = ctx.getImageData(0, 0, W, H).data;
       const palette = quantize(data, 256);
       const index = applyPalette(data, palette);
@@ -958,11 +981,11 @@ async function makeGif() {
     img.style.cssText = 'width:100%; max-width:280px; display:block; margin:0 auto 16px; border-radius:16px; box-shadow:var(--sh)';
     res.appendChild(img);
     const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
-    const a = document.createElement('a'); a.href = url; a.download = 'aligno.gif';
+    const a = document.createElement('a'); a.href = url; a.download = fileSafe(expName) + '.gif';
     a.className = 'btn ghost flex'; a.textContent = 'Save'; a.style.textDecoration = 'none';
     row.appendChild(a);
     try {
-      const file = new File([blob], 'aligno.gif', { type: 'image/gif' });
+      const file = new File([blob], fileSafe(expName) + '.gif', { type: 'image/gif' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Share';
         sh.onclick = () => navigator.share({ files: [file], title: 'Aligno' }).catch(() => {});
@@ -1045,6 +1068,61 @@ function watchUpdates(reg) {
       if (nw.state === 'installed' && navigator.serviceWorker.controller) $('updatePill').classList.add('on');
     });
   });
+}
+
+/* --- Back button (Android hardware back, browser back, Escape): keep one
+   "guard" history entry while anything is open on top of the home screen,
+   and turn a back press into closing whatever is topmost. --- */
+let skipPop = false;
+function seenIntro() { try { return !!localStorage.getItem('aligno_seen'); } catch (e) { return false; } }
+function openSheet() { return document.querySelector('.modal-bg.on'); }
+function isRoot() {
+  if (openSheet() || $('photoView').classList.contains('on')) return false;
+  return state.screen === 'home' || (state.screen === 'landing' && !seenIntro());
+}
+function syncHistory() {
+  if (skipPop) return;
+  const guarded = !!(history.state && history.state.aligno === 'g');
+  if (!isRoot() && !guarded) history.pushState({ aligno: 'g' }, '');
+  else if (isRoot() && guarded) { skipPop = true; history.back(); }
+}
+function goBack() {
+  if ($('cfModal').classList.contains('on')) { cfDone(false); return; }
+  const sheet = openSheet();
+  if (sheet) { sheet.classList.remove('on'); closeOtherSwipes(null); return; }
+  if ($('photoView').classList.contains('on')) { closePhotoView(); return; }
+  switch (state.screen) {
+    case 'camera': case 'reminders': openProject(state.projectId); break;
+    case 'export': clearInterval(expTimer); openProject(state.projectId); break;
+    case 'aligner': alCloseAligner(); break;
+    case 'project': case 'settings': case 'landing': show('home'); renderHome(); break;
+  }
+}
+function wireHistory() {
+  try { history.replaceState({ aligno: 'root' }, ''); } catch (e) {}
+  window.addEventListener('popstate', () => {
+    if (skipPop) { skipPop = false; syncHistory(); return; }
+    goBack();
+    setTimeout(syncHistory, 0);
+  });
+  const mo = new MutationObserver(() => Promise.resolve().then(syncHistory));
+  document.querySelectorAll('.modal-bg, .photoview').forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class'] }));
+  document.addEventListener('keydown', e => {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.key !== 'Escape') return;
+    const pv = $('photoView').classList.contains('on');
+    if (e.key === 'Escape' && !isRoot()) { e.preventDefault(); goBack(); }
+    else if (pv && e.key === 'ArrowLeft') openPhotoViewAt(viewIndex - 1);
+    else if (pv && e.key === 'ArrowRight') openPhotoViewAt(viewIndex + 1);
+    else if (state.screen === 'camera' && e.key === ' ' && e.target === document.body) { e.preventDefault(); capturePhoto(); }
+  });
+}
+
+function askPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(() => {}); }).catch(() => {});
+    }
+  } catch (e) {}
 }
 
 function wire() {
@@ -1184,6 +1262,13 @@ function wire() {
 
   $('updatePill').addEventListener('click', () => location.reload());
 
+  document.addEventListener('visibilitychange', () => {
+    if (state.screen !== 'camera') return;
+    if (document.hidden) stopCamera();
+    else if (!stream) startCamera();
+  });
+  wireHistory();
+
   let deferred = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').style.display = 'flex'; });
   $('installBtn').addEventListener('click', async () => {
@@ -1199,7 +1284,8 @@ function wire() {
     await renderHome();
     let seen = false; try { seen = !!localStorage.getItem('aligno_seen'); } catch (e) {}
     if (seen) show('home'); else setTheme(false);
-    if ('serviceWorker' in navigator) {
+    askPersistentStorage();
+    if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
       navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {});
     }
   } catch (e) {
