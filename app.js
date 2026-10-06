@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -627,7 +627,7 @@ function hideOverlay() {
 function setOverlay(raw, source) {
   overlayRaw = raw; overlayEdge = null; camHasOverlay = true;
   overlaySource = source || 'project';
-  $('op').value = 50; $('opv').textContent = '50%';
+  $('op').value = camPrefs.op; $('opv').textContent = camPrefs.op + '%';
   $('opRow').style.display = 'flex'; $('modeSeg').style.display = 'flex';
   $('camLastThumb').src = raw; $('camLastThumb').style.display = 'block';
   $('camhint').style.display = 'none';
@@ -671,10 +671,112 @@ async function applyOverlay() {
   }
 }
 
+/* Overlay mode + opacity are remembered per project, so every session
+   starts the way you left it. */
+const camPrefs = { op: 50 };
+function saveCamPrefs() {
+  clearTimeout(saveCamPrefs._t);
+  const pid = state.projectId, mode = state.overlayMode, op = Math.round(+$('op').value);
+  camPrefs.op = op;
+  saveCamPrefs._t = setTimeout(async () => {
+    const p = pid ? await dbGetProject(pid) : null;
+    if (!p) return;
+    p.camMode = mode; p.camOp = op;
+    await dbPutProject(p);
+  }, 500);
+}
+
+/* Self-timer: 0 / 3 / 10 seconds, remembered across sessions. */
+let timerSec = 0, countdownT = null;
+try { timerSec = +localStorage.getItem('aligno_timer') || 0; } catch (e) {}
+function syncTimerBtn() {
+  const l = $('timerLbl');
+  l.textContent = timerSec ? String(timerSec) : '';
+  l.classList.toggle('on', !!timerSec);
+  $('timerBtn').setAttribute('aria-label', timerSec ? 'Self-timer: ' + timerSec + ' seconds' : 'Self-timer: off');
+}
+function cycleTimer() {
+  timerSec = timerSec === 0 ? 3 : timerSec === 3 ? 10 : 0;
+  try { localStorage.setItem('aligno_timer', String(timerSec)); } catch (e) {}
+  syncTimerBtn();
+  camBadge(timerSec ? 'Self-timer: ' + timerSec + ' seconds' : 'Self-timer off');
+}
+function cancelCountdown() {
+  clearTimeout(countdownT); countdownT = null;
+  $('countdown').classList.remove('on'); $('countdown').innerHTML = '';
+}
+function shutterPressed() {
+  if (countdownT) { cancelCountdown(); camBadge('Timer cancelled'); return; }
+  if (!timerSec) { capturePhoto(); return; }
+  let n = timerSec;
+  const cd = $('countdown');
+  cd.classList.add('on');
+  const tick = () => {
+    if (n <= 0) { cancelCountdown(); capturePhoto(); return; }
+    cd.innerHTML = '<span>' + n + '</span>';
+    if (navigator.vibrate && n <= 3) { try { navigator.vibrate(8); } catch (e) {} }
+    n--;
+    countdownT = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+/* Level: uses gravity from the motion sensor to show how far the phone is
+   tilted, so every shot is taken at the same angle. Shown with the grid. */
+let levelOn = false, levelRaf = 0, levelG = null;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity;
+  if (!g || g.x === null || g.y === null) return;
+  levelG = IS_IOS ? { x: -g.x, y: -g.y, z: -(g.z || 0) } : { x: g.x, y: g.y, z: g.z || 0 };
+  if (!levelRaf) levelRaf = requestAnimationFrame(drawLevel);
+}
+function drawLevel() {
+  levelRaf = 0;
+  const lv = $('level');
+  if (!levelOn || !levelG) { lv.classList.remove('on'); return; }
+  const { x, y, z } = levelG;
+  const mag = Math.hypot(x, y, z) || 9.8;
+  let deg, flat = Math.abs(z) / mag > 0.9;
+  if (flat) {
+    deg = Math.acos(Math.min(1, Math.abs(z) / mag)) * 180 / Math.PI;
+    $('lvLine').style.transform = 'none';
+    $('lvDeg').textContent = deg < 1 ? 'Flat ✓' : 'Flat · ' + deg.toFixed(1) + '°';
+  } else {
+    deg = Math.atan2(x, y) * 180 / Math.PI;
+    deg = deg - Math.round(deg / 90) * 90;
+    $('lvLine').style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
+    $('lvDeg').textContent = Math.abs(deg) < 1 ? 'Level ✓' : Math.abs(deg).toFixed(1) + '°';
+  }
+  lv.classList.toggle('ok', Math.abs(deg) < 1);
+  lv.classList.add('on');
+}
+function setLevel(on) {
+  levelOn = on;
+  if (on) {
+    window.addEventListener('devicemotion', onMotion);
+  } else {
+    window.removeEventListener('devicemotion', onMotion);
+    levelG = null;
+    $('level').classList.remove('on');
+  }
+}
+function requestMotionPermission() {
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission().catch(() => {});
+    }
+  } catch (e) {}
+}
+
 async function openCamera() {
   const p = await dbGetProject(state.projectId);
   if (!p) return;
   $('camProjName').textContent = p.name;
+  state.overlayMode = ['photo', 'edges', 'diff'].indexOf(p.camMode) >= 0 ? p.camMode : 'photo';
+  camPrefs.op = typeof p.camOp === 'number' ? p.camOp : 50;
+  cancelCountdown();
+  syncTimerBtn();
   const photos = await photosOf(p);
   const last = photos.length ? photos[photos.length - 1] : null;
   syncModeSeg();
@@ -701,6 +803,7 @@ function setGrid() {
   g.appendChild(Object.assign(document.createElement('div'), { className: 'gcross' }));
   lbl.textContent = gridMode === 1 ? 'Thirds' : 'Fine';
 }
+function syncGridLevel() { setLevel(gridMode !== 0 && state.screen === 'camera'); }
 
 function setupZoom() {
   const row = $('zoomRow');
@@ -741,8 +844,10 @@ async function startCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = newStream;
     $('video').srcObject = stream;
+    $('screen-camera').classList.toggle('mirror', facing === 'user');
     await $('video').play();
     setupZoom();
+    syncGridLevel();
     err.classList.remove('on');
   } catch (e) {
     const n = e && e.name;
@@ -756,6 +861,8 @@ async function startCamera() {
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   zoomTrack = null;
+  cancelCountdown();
+  setLevel(false);
 }
 
 function toBlobP(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
@@ -1248,7 +1355,7 @@ function wireHistory() {
     if (e.key === 'Escape' && !isRoot()) { e.preventDefault(); goBack(); }
     else if (pv && e.key === 'ArrowLeft') openPhotoViewAt(viewIndex - 1);
     else if (pv && e.key === 'ArrowRight') openPhotoViewAt(viewIndex + 1);
-    else if (state.screen === 'camera' && e.key === ' ' && e.target === document.body) { e.preventDefault(); capturePhoto(); }
+    else if (state.screen === 'camera' && e.key === ' ' && e.target === document.body) { e.preventDefault(); shutterPressed(); }
   });
 }
 
@@ -1566,17 +1673,22 @@ function wire() {
 
   $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
   $('camRetry').addEventListener('click', startCamera);
-  $('gridBtn').addEventListener('click', () => { gridMode = (gridMode + 1) % 3; setGrid(); });
+  $('gridBtn').addEventListener('click', () => {
+    if (gridMode === 0) requestMotionPermission();
+    gridMode = (gridMode + 1) % 3; setGrid(); syncGridLevel();
+  });
   $('modeSeg').addEventListener('click', (e) => {
     const b = e.target.closest('[data-om]'); if (!b) return;
     state.overlayMode = b.getAttribute('data-om');
     if (state.overlayMode === 'diff') { $('op').value = 100; $('opv').textContent = '100%'; camBadge('Line it up until the screen goes dark'); }
-    syncModeSeg(); applyOverlay();
+    syncModeSeg(); applyOverlay(); saveCamPrefs();
   });
-  $('shot').addEventListener('click', capturePhoto);
+  $('shot').addEventListener('click', shutterPressed);
+  $('timerBtn').addEventListener('click', cycleTimer);
   $('op').addEventListener('input', function () {
     $('opv').textContent = Math.round(this.value) + '%';
     if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
+    saveCamPrefs();
   });
   $('zoom').addEventListener('input', function () { applyZoom(this.value); });
 

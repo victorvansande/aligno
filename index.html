@@ -137,7 +137,8 @@
 
   .cam-top{ position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between;
     padding:calc(env(safe-area-inset-top) + 14px) 16px 14px; color:#fff; }
-  .cam-top .nm{ font-size:16px; font-weight:600; letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4); }
+  .cam-top .nm{ font-size:16px; font-weight:600; letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4);
+    flex:1; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 10px; }
   .glass{ background:rgba(28,30,33,.42); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
   .ciconbtn{ width:44px; height:44px; border-radius:50%; border:none; color:#fff;
     display:flex; align-items:center; justify-content:center; cursor:pointer; }
@@ -369,6 +370,24 @@
     padding:3px 5px; border-radius:6px; background:var(--al); color:#fff; display:none; }
   .cmp-th.a i.ia, .cmp-th.b i.ib{ display:block; }
   .cmp-th.a.b i.ib{ left:auto; right:3px; }
+
+  .cam.mirror #video, .cam.mirror #overlay{ transform:scaleX(-1); }
+  .ciconbtn{ position:relative; }
+  .tmr{ position:absolute; right:-3px; top:-3px; min-width:18px; height:18px; border-radius:9px; padding:0 4px;
+    background:var(--al); color:#fff; font-size:10.5px; font-weight:700; line-height:18px; display:none; }
+  .tmr.on{ display:block; }
+  .countdown{ position:absolute; inset:0; z-index:7; display:none; align-items:center; justify-content:center;
+    font-size:120px; font-weight:700; color:#fff; text-shadow:0 4px 30px rgba(0,0,0,.45); pointer-events:none; }
+  .countdown.on{ display:flex; }
+  .countdown span{ animation:cdPop 1s ease both; }
+  @keyframes cdPop{ 0%{ opacity:0; transform:scale(1.5); } 20%{ opacity:1; transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(.9); } }
+  .level{ position:absolute; top:50%; left:50%; width:190px; height:30px; margin:-15px 0 0 -95px; z-index:3; pointer-events:none; display:none; }
+  .level.on{ display:block; }
+  .level i{ position:absolute; top:50%; height:2px; margin-top:-1px; background:rgba(255,255,255,.75); border-radius:2px; box-shadow:0 0 3px rgba(0,0,0,.4); }
+  .level .lv-l{ left:0; width:34px; } .level .lv-r{ right:0; width:34px; }
+  .level .lv-line{ left:44px; right:44px; background:#FFD43B; transition:transform .08s linear; }
+  .level.ok i{ background:#49E08A; }
+  .level .lv-deg{ position:absolute; top:22px; left:0; right:0; text-align:center; font-size:11px; font-weight:600; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); }
 
   .seg{ display:flex; gap:4px; padding:4px; border-radius:14px; background:var(--neu); margin-bottom:22px; }
   .seg button{ flex:1; border:none; background:transparent; color:var(--txt2); padding:10px 6px; border-radius:11px;
@@ -602,11 +621,14 @@
     <video id="video" playsinline autoplay muted></video>
     <img id="overlay" alt="">
     <div class="gridlines" id="gridlines"></div>
+    <div class="level" id="level" aria-hidden="true"><i class="lv-l"></i><i class="lv-line" id="lvLine"></i><i class="lv-r"></i><span class="lv-deg" id="lvDeg"></span></div>
+    <div class="countdown" id="countdown"></div>
     <div id="flash"></div>
     <div class="cam-top">
       <button class="ciconbtn glass" id="camClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <span class="nm" id="camProjName">Align</span>
       <span style="display:flex; gap:8px">
+        <button class="ciconbtn glass" id="timerBtn" aria-label="Self-timer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></svg><b class="tmr" id="timerLbl"></b></button>
         <button class="ciconbtn glass" id="libBtn" aria-label="Use a photo from your library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></button>
         <button class="ciconbtn glass" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
       </span>
