@@ -1,6 +1,6 @@
-﻿'use strict';
+'use strict';
 
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -134,7 +134,7 @@ const EXAMPLES = [
   { name: 'Growing up', label: 'A child', desc: 'watch them grow', frames: [personIll(0.25), personIll(0.6), personIll(1)] }
 ];
 function strip(frames) {
-  return frames.map((f, j) => (j ? '<span class="ex-ar">â€º</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
+  return frames.map((f, j) => (j ? '<span class="ex-ar">›</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
 }
 function renderExamples() {
   const el = $('exampleList');
@@ -150,9 +150,29 @@ function renderLandingDemo() {
 
 const state = { screen: 'landing', projectId: null, overlayMode: 'photo' };
 
+function themePref() { try { return localStorage.getItem('aligno_theme') || 'system'; } catch (e) { return 'system'; } }
+function uiIsDark() {
+  const t = themePref();
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+}
+let darkSurface = false;
 function setTheme(dark) {
+  darkSurface = !!dark;
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute('content', dark ? '#0d0f12' : '#ffffff');
+  if (m) m.setAttribute('content', dark ? '#08080b' : (uiIsDark() ? '#0D0D12' : '#ffffff'));
+}
+function applyThemePref(t) {
+  try { if (t === 'system') localStorage.removeItem('aligno_theme'); else localStorage.setItem('aligno_theme', t); } catch (e) {}
+  if (t === 'system') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  syncThemeSeg();
+  setTheme(darkSurface);
+}
+function syncThemeSeg() {
+  const t = themePref();
+  document.querySelectorAll('[data-theme-opt]').forEach(b => b.classList.toggle('on', b.getAttribute('data-theme-opt') === t));
 }
 
 const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings', 'aligner'];
@@ -199,7 +219,7 @@ async function renderHome() {
       '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
       '<div class="pcard" data-open="' + p.id + '">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
-      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' Â· ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
+      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
   list.innerHTML = cards.join('');
@@ -270,7 +290,7 @@ function wireSwipeCard(wrap) {
 }
 async function deleteProjectFromHome(id) {
   const p = await dbGetProject(id);
-  const ok = await confirmSheet('Delete â€œ' + ((p && p.name) || 'this project') + 'â€?', 'All its photos will be permanently removed from this device.', 'Delete project');
+  const ok = await confirmSheet('Delete “' + ((p && p.name) || 'this project') + '”?', 'All its photos will be permanently removed from this device.', 'Delete project');
   if (!ok) { closeOtherSwipes(null); return; }
   const photos = p ? await photosOf(p) : [];
   for (const ph of photos) {
@@ -296,13 +316,13 @@ async function openProject(id) {
   $('dueBanner').innerHTML = isDue(p, last)
     ? '<div class="due-banner" id="dueGo">' +
       '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
-      '<span><b>Photo due.</b> Keep the series going â€” take the next shot.</span>' +
+      '<span><b>Photo due.</b> Keep the series going — take the next shot.</span>' +
       '<span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>'
     : '';
   const dueGo = $('dueGo');
   if (dueGo) dueGo.addEventListener('click', openCamera);
 
-  $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' Â· chronological');
+  $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
   renderProjectHero(photos);
   const grid = $('photoGrid');
   const empty = $('projEmpty');
@@ -639,7 +659,7 @@ async function applyOverlay() {
   ov.classList.toggle('diff', state.overlayMode === 'diff');
   if (state.overlayMode === 'edges') {
     if (!overlayEdge) {
-      $('omEdges').textContent = 'Workingâ€¦';
+      $('omEdges').textContent = 'Working…';
       try { overlayEdge = await computeEdges(overlayRaw); }
       catch (e) { overlayEdge = overlayRaw; }
       $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges';
@@ -695,7 +715,7 @@ function setupZoom() {
     let cur = caps.zoom.min;
     try { const s = track.getSettings(); if (typeof s.zoom === 'number') cur = s.zoom; } catch (e) {}
     z.value = cur;
-    $('zoomv').textContent = Number(cur).toFixed(1) + 'Ã—';
+    $('zoomv').textContent = Number(cur).toFixed(1) + '×';
     row.style.display = 'flex';
   } else {
     row.style.display = 'none';
@@ -704,7 +724,7 @@ function setupZoom() {
 async function applyZoom(v) {
   if (!zoomTrack) return;
   try { await zoomTrack.applyConstraints({ advanced: [{ zoom: Number(v) }] }); } catch (e) {}
-  $('zoomv').textContent = Number(v).toFixed(1) + 'Ã—';
+  $('zoomv').textContent = Number(v).toFixed(1) + '×';
 }
 
 async function startCamera() {
@@ -773,7 +793,7 @@ async function capturePhoto() {
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
   setOverlay(urlFor(ph, 'full'));
-  camBadge('Photo ' + count + ' saved â€” now aligned to this');
+  camBadge('Photo ' + count + ' saved — now aligned to this');
 }
 
 function camBadge(text) {
@@ -817,7 +837,7 @@ function alSetZoom(v) {
   alState.scale = Math.max(1, Math.min(4, Number(v)));
   alRender();
   $('alZoom').value = alState.scale;
-  $('alZoomv').textContent = alState.scale.toFixed(1) + 'Ã—';
+  $('alZoomv').textContent = alState.scale.toFixed(1) + '×';
 }
 
 function startAligner(projectId, fileList) {
@@ -986,7 +1006,7 @@ function openPhotoViewAt(i) {
   viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
   const ph = viewList[viewIndex];
   $('photoViewImg').src = urlFor(ph, 'full');
-  $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' Â· ' + fmtFullDate(ph.ts) +
+  $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
     ' <span class="pv-src">' + srcIcon(ph) + srcLabel(ph) + '</span>';
   $('pvPrev').style.visibility = viewIndex > 0 ? 'visible' : 'hidden';
   $('pvNext').style.visibility = viewIndex < viewList.length - 1 ? 'visible' : 'hidden';
@@ -1026,8 +1046,8 @@ async function openExport() {
   expName = p.name;
   const n = expPhotos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
-    : n === 1 ? '1 photo â€” add at least one more to make a GIF'
-    : n + ' photos Â· preview';
+    : n === 1 ? '1 photo — add at least one more to make a GIF'
+    : n + ' photos · preview';
   $('gifResult').innerHTML = '';
   const btn = $('makeGifBtn');
   btn.disabled = n < 2;
@@ -1067,8 +1087,8 @@ async function makeGif() {
   if (expPhotos.length < 2) return;
   const btn = $('makeGifBtn');
   const res = $('gifResult');
-  btn.disabled = true; btn.textContent = 'Workingâ€¦';
-  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIFâ€¦</p>';
+  btn.disabled = true; btn.textContent = 'Working…';
+  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIF…</p>';
   try {
     const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
     const first = await loadImage(urlFor(expPhotos[0], 'full'));
@@ -1108,7 +1128,7 @@ async function makeGif() {
     res.appendChild(row);
     btn.disabled = false; btn.textContent = 'Make again';
   } catch (e) {
-    res.innerHTML = '<p class="note">Couldnâ€™t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
+    res.innerHTML = '<p class="note">Couldn’t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
     btn.disabled = false; btn.textContent = 'Make GIF';
   }
 }
@@ -1126,7 +1146,7 @@ async function openReminders() {
   const cur = (p && p.reminder) ? p.reminder : 'Off';
   state._rem = remOptions.find(o => o.toLowerCase() === cur.toLowerCase()) || 'Off';
   renderRemOpts();
-  $('remNote').textContent = 'Youâ€™ll see a â€œDueâ€ badge on the project when itâ€™s time for the next photo. Push notifications at a fixed time will come with the native app version.';
+  $('remNote').textContent = 'You’ll see a “Due” badge on the project when it’s time for the next photo. Push notifications at a fixed time will come with the native app version.';
   show('reminders');
 }
 async function saveReminder() {
@@ -1155,7 +1175,7 @@ async function openSettings() {
   const mb = bytes / 1048576;
   const mbLabel = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1);
   $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(count, 'photos') + statCard(mbLabel, 'MB used');
-  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' Â· web preview';
+  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' · web preview';
   show('settings');
 }
 
@@ -1384,6 +1404,16 @@ function wire() {
   wireCompare();
   wireHistory();
 
+  syncThemeSeg();
+  $('themeSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-theme-opt]'); if (b) applyThemePref(b.getAttribute('data-theme-opt'));
+  });
+  if (window.matchMedia) {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setTheme(darkSurface);
+    if (mq.addEventListener) mq.addEventListener('change', onChange); else if (mq.addListener) mq.addListener(onChange);
+  }
+
   let deferred = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').style.display = 'flex'; });
   $('installBtn').addEventListener('click', async () => {
@@ -1404,6 +1434,6 @@ function wire() {
       navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(() => {});
     }
   } catch (e) {
-    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldnâ€™t start the app: ' + (e && e.message) + '</div>';
+    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
   }
 })();
