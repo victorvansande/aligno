@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -178,6 +178,7 @@ function syncThemeSeg() {
 const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings', 'aligner'];
 function show(name) {
   if (state.screen === 'camera' && name !== 'camera') stopCamera();
+  if (state.screen === 'export' && name !== 'export') stopExportPreview();
   screens.forEach(s => {
     const el = $('screen-' + s);
     if (el) el.classList.toggle('active', s === name);
@@ -1144,30 +1145,256 @@ async function deleteViewedPhoto() {
   openPhotoViewAt(Math.min(oldIndex, viewList.length - 1));
 }
 
-let expFps = 3, expTimer = null, expPhotos = [], expName = 'aligno';
+/* --- Export: GIF or video, with shape, date stamp, crossfade and a hold on
+   the last photo. The preview runs the exact same timeline and drawing code
+   as the export, just on thumbnails. --- */
+const exp = { photos: [], thumbs: [], name: 'aligno', fps: 3, format: 'gif', shape: 'original', dates: false, fade: false, hold: true, raf: 0, t0: 0, busy: false };
+try { Object.assign(exp, JSON.parse(localStorage.getItem('aligno_export') || '{}')); } catch (e) {}
+exp.busy = false;
+function saveExportPrefs() {
+  try { localStorage.setItem('aligno_export', JSON.stringify({ fps: exp.fps, format: exp.format, shape: exp.shape, dates: exp.dates, fade: exp.fade, hold: exp.hold })); } catch (e) {}
+}
+const VIDEO_TYPES = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+function videoType() {
+  try {
+    if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream) return null;
+    return VIDEO_TYPES.find(t => MediaRecorder.isTypeSupported(t)) || null;
+  } catch (e) { return null; }
+}
+function expSize(maxLong) {
+  let ar = 3 / 4;
+  if (exp.shape === 'square') ar = 1;
+  else if (exp.shape === 'story') ar = 9 / 16;
+  else { const t = exp.thumbs[0]; if (t && t.naturalWidth) ar = t.naturalWidth / t.naturalHeight; }
+  let W, H;
+  if (ar >= 1) { W = maxLong; H = maxLong / ar; } else { H = maxLong; W = maxLong * ar; }
+  return { W: Math.round(W / 2) * 2, H: Math.round(H / 2) * 2 };
+}
+function expTimeline() {
+  const n = exp.photos.length, slot = 1 / exp.fps;
+  const hold = exp.hold ? Math.max(1.2, slot * 2) : 0;
+  return { n, slot, hold, total: n * slot + hold };
+}
+function frameAt(sec) {
+  const { n, slot } = expTimeline();
+  const k = Math.floor(sec / slot);
+  if (k >= n - 1) return { i: n - 1, t: 0 };
+  const local = sec / slot - k;
+  let t = exp.fade ? Math.max(0, (local - 0.5) / 0.5) : 0;
+  t = t * t * (3 - 2 * t);
+  return { i: k, t };
+}
+function stampText(ts) { const d = new Date(ts); return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+function drawFrame(ctx, W, H, imA, imB, t, tsA, tsB) {
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  if (imA) drawCover(ctx, imA, W, H);
+  if (imB && t > 0) { ctx.globalAlpha = t; drawCover(ctx, imB, W, H); ctx.globalAlpha = 1; }
+  if (exp.dates) {
+    const txt = stampText(t > 0.5 && tsB ? tsB : tsA);
+    const s = Math.max(10, Math.round(Math.min(W, H) * 0.042));
+    ctx.font = '600 ' + s + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textBaseline = 'middle';
+    const pad = s * 0.75, w = ctx.measureText(txt).width + pad * 2, h = s * 1.9;
+    const x = s * 0.9, y = H - h - s * 0.9;
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, h / 2); else ctx.rect(x, y, w, h);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(txt, x + pad, y + h / 2 + 1);
+  }
+}
 
 async function openExport() {
   const p = await dbGetProject(state.projectId);
   if (!p) return;
-  expPhotos = await photosOf(p);
-  expName = p.name;
-  const n = expPhotos.length;
+  exp.photos = await photosOf(p);
+  exp.name = p.name;
+  const n = exp.photos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
-    : n === 1 ? '1 photo — add at least one more to make a GIF'
-    : n + ' photos · preview';
+    : n === 1 ? '1 photo — add at least one more to export'
+    : n + ' photos · live preview';
   $('gifResult').innerHTML = '';
-  const btn = $('makeGifBtn');
-  btn.disabled = n < 2;
-  btn.textContent = 'Make GIF';
+  if (!videoType()) {
+    exp.format = 'gif';
+    $('expFormat').querySelector('[data-v="video"]').disabled = true;
+  }
+  $('fps').value = exp.fps; $('fpsv').textContent = exp.fps + ' fps';
+  $('expDates').checked = exp.dates; $('expFade').checked = exp.fade; $('expHold').checked = exp.hold;
+  syncExportUi();
   show('export');
+  exp.thumbs = await Promise.all(exp.photos.map(ph => loadImage(urlFor(ph, 'thumb')).catch(() => null)));
   startExportPreview();
 }
+function syncExportUi() {
+  $('expFormat').querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.getAttribute('data-v') === exp.format));
+  $('expShape').querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.getAttribute('data-v') === exp.shape));
+  const btn = $('makeGifBtn');
+  btn.disabled = exp.photos.length < 2 || exp.busy;
+  if (!exp.busy) btn.textContent = exp.format === 'video' ? 'Make video' : 'Make GIF';
+}
+function stopExportPreview() { cancelAnimationFrame(exp.raf); exp.raf = 0; }
 function startExportPreview() {
-  clearInterval(expTimer);
-  if (!expPhotos.length) { $('expFrame').removeAttribute('src'); return; }
-  let i = 0; $('expFrame').src = urlFor(expPhotos[0], 'full');
-  if (expPhotos.length < 2) return;
-  expTimer = setInterval(() => { i = (i + 1) % expPhotos.length; $('expFrame').src = urlFor(expPhotos[i], 'full'); }, 1000 / expFps);
+  stopExportPreview();
+  const cv = $('expCanvas');
+  if (!exp.photos.length || !exp.thumbs.length) { cv.width = 1; cv.height = 1; return; }
+  const { W, H } = expSize(560);
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  exp.t0 = performance.now();
+  const step = () => {
+    const { total } = expTimeline();
+    const sec = ((performance.now() - exp.t0) / 1000) % total;
+    const f = frameAt(sec);
+    const A = exp.photos[f.i], B = exp.photos[f.i + 1];
+    drawFrame(ctx, W, H, exp.thumbs[f.i], exp.thumbs[f.i + 1], f.t, A && A.ts, B && B.ts);
+    exp.raf = requestAnimationFrame(step);
+  };
+  step();
+}
+
+/* Renders every photo once, cover-cropped to the export size, as a small JPEG
+   — keeps memory flat no matter how long the series is. */
+async function prepFrames(W, H, onStep) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const out = [];
+  for (let i = 0; i < exp.photos.length; i++) {
+    const im = await loadImage(urlFor(exp.photos[i], 'full'));
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    drawCover(ctx, im, W, H);
+    out.push(await toBlobP(c, 'image/jpeg', 0.93));
+    if (onStep) onStep(i + 1, exp.photos.length);
+  }
+  return out;
+}
+function blobBitmap(b) {
+  if (window.createImageBitmap) return createImageBitmap(b);
+  return loadImage(URL.createObjectURL(b));
+}
+
+async function makeVideo(setStatus) {
+  const type = videoType();
+  if (!type) throw new Error('Video isn’t supported in this browser');
+  const { W, H } = expSize(1080);
+  const blobs = await prepFrames(W, H, (i, n) => setStatus('Preparing photos… ' + i + '/' + n));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const bmps = new Map();
+  const getBmp = async (i) => {
+    if (i < 0 || i >= blobs.length) return null;
+    if (!bmps.has(i)) bmps.set(i, blobBitmap(blobs[i]));
+    return bmps.get(i);
+  };
+  const first = await getBmp(0), second = await getBmp(1);
+  drawFrame(ctx, W, H, first, second, 0, exp.photos[0].ts, exp.photos[1] && exp.photos[1].ts);
+  const stream = cv.captureStream(30);
+  const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8000000 });
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(r => { rec.onstop = r; });
+  rec.start(500);
+  const { total } = expTimeline();
+  let t0 = performance.now();
+  await new Promise((resolve) => {
+    const tick = async () => {
+      const sec = (performance.now() - t0) / 1000;
+      if (sec >= total) { resolve(); return; }
+      const f = frameAt(sec);
+      const wait0 = performance.now();
+      const [a, b] = await Promise.all([getBmp(f.i), f.t > 0 ? getBmp(f.i + 1) : null]);
+      t0 += performance.now() - wait0 > 40 ? performance.now() - wait0 : 0;
+      drawFrame(ctx, W, H, a, b, f.t, exp.photos[f.i].ts, exp.photos[f.i + 1] && exp.photos[f.i + 1].ts);
+      getBmp(f.i + 1); getBmp(f.i + 2);
+      bmps.forEach((p, k) => { if (k < f.i - 1) { p.then(x => x && x.close && x.close()); bmps.delete(k); } });
+      setStatus('Recording… ' + Math.min(99, Math.round(sec / total * 100)) + '%');
+      setTimeout(tick, 1000 / 30);
+    };
+    tick();
+  });
+  rec.stop();
+  await stopped;
+  stream.getTracks().forEach(t => t.stop());
+  bmps.forEach(p => p.then(x => x && x.close && x.close()));
+  const base = type.split(';')[0];
+  return { blob: new Blob(chunks, { type: base }), ext: base === 'video/mp4' ? 'mp4' : 'webm' };
+}
+
+async function makeGifBlob(setStatus) {
+  const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
+  const { W, H } = expSize(540);
+  const blobs = await prepFrames(W, H, (i, n) => setStatus('Preparing photos… ' + i + '/' + n));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const enc = GIFEncoder();
+  const { n, slot, hold } = expTimeline();
+  const put = (delaySec) => {
+    const data = ctx.getImageData(0, 0, W, H).data;
+    const palette = quantize(data, 256);
+    enc.writeFrame(applyPalette(data, palette), W, H, { palette, delay: Math.max(20, Math.round(delaySec * 1000)) });
+  };
+  let prev = await blobBitmap(blobs[0]);
+  for (let i = 0; i < n; i++) {
+    const next = i + 1 < n ? await blobBitmap(blobs[i + 1]) : null;
+    const last = i === n - 1;
+    drawFrame(ctx, W, H, prev, null, 0, exp.photos[i].ts);
+    put(last ? slot + hold : (exp.fade ? slot * 0.5 : slot));
+    if (exp.fade && next) {
+      for (const t of [0.2, 0.5, 0.8]) {
+        drawFrame(ctx, W, H, prev, next, t * t * (3 - 2 * t), exp.photos[i].ts, exp.photos[i + 1].ts);
+        put(slot * 0.5 / 3);
+      }
+    }
+    if (prev && prev.close) prev.close();
+    prev = next;
+    setStatus('Encoding GIF… ' + Math.round((i + 1) / n * 100) + '%');
+    await new Promise(r => setTimeout(r, 0));
+  }
+  enc.finish();
+  return { blob: new Blob([enc.bytes()], { type: 'image/gif' }), ext: 'gif' };
+}
+
+async function makeExport() {
+  if (exp.photos.length < 2 || exp.busy) return;
+  exp.busy = true;
+  const btn = $('makeGifBtn'), res = $('gifResult');
+  btn.disabled = true;
+  const setStatus = (s) => { btn.textContent = s; };
+  setStatus('Working…');
+  res.innerHTML = '';
+  try {
+    const out = exp.format === 'video' ? await makeVideo(setStatus) : await makeGifBlob(setStatus);
+    const url = URL.createObjectURL(out.blob);
+    const fname = fileSafe(exp.name) + '.' + out.ext;
+    let media;
+    if (out.ext === 'gif') { media = new Image(); media.src = url; media.alt = 'Your GIF'; }
+    else { media = document.createElement('video'); media.src = url; media.controls = true; media.loop = true; media.muted = true; media.playsInline = true; media.autoplay = true; }
+    media.className = 'exp-out';
+    res.appendChild(media);
+    const mb = out.blob.size / 1048576;
+    const info = document.createElement('p'); info.className = 'exp-info';
+    info.textContent = (out.ext === 'gif' ? 'GIF' : out.ext.toUpperCase() + ' video') + ' · ' + (mb >= 1 ? mb.toFixed(1) + ' MB' : Math.max(1, Math.round(out.blob.size / 1024)) + ' KB');
+    res.appendChild(info);
+    const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
+    const a = document.createElement('a'); a.href = url; a.download = fname;
+    a.className = 'btn ghost flex'; a.textContent = 'Save'; a.style.textDecoration = 'none';
+    row.appendChild(a);
+    try {
+      const file = new File([out.blob], fname, { type: out.blob.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Share';
+        sh.onclick = () => navigator.share({ files: [file], title: exp.name }).catch(() => {});
+        row.appendChild(sh);
+      }
+    } catch (e) {}
+    res.appendChild(row);
+    setTimeout(() => res.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  } catch (e) {
+    res.innerHTML = '<p class="note">Couldn’t create the ' + (exp.format === 'video' ? 'video' : 'GIF') + ' (' + escapeHtml((e && e.message) || 'unknown error') + ').</p>';
+  }
+  exp.busy = false;
+  syncExportUi();
 }
 
 async function loadImage(src) {
@@ -1190,55 +1417,6 @@ function fileSafe(name) {
   return String(name || '').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').toLowerCase() || 'aligno';
 }
 
-async function makeGif() {
-  if (expPhotos.length < 2) return;
-  const btn = $('makeGifBtn');
-  const res = $('gifResult');
-  btn.disabled = true; btn.textContent = 'Working…';
-  res.innerHTML = '<div class="spinner"></div><p class="sub" style="text-align:center; margin-top:14px">Creating GIF…</p>';
-  try {
-    const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
-    const first = await loadImage(urlFor(expPhotos[0], 'full'));
-    const W = 480, H = Math.round(W * first.height / first.width) || 640;
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d', { willReadFrequently: true });
-    const enc = GIFEncoder();
-    const delay = Math.round(1000 / expFps);
-    for (const ph of expPhotos) {
-      const im = await loadImage(urlFor(ph, 'full'));
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-      drawCover(ctx, im, W, H);
-      const data = ctx.getImageData(0, 0, W, H).data;
-      const palette = quantize(data, 256);
-      const index = applyPalette(data, palette);
-      enc.writeFrame(index, W, H, { palette, delay });
-    }
-    enc.finish();
-    const blob = new Blob([enc.bytes()], { type: 'image/gif' });
-    const url = URL.createObjectURL(blob);
-    res.innerHTML = '';
-    const img = new Image(); img.src = url; img.alt = 'GIF';
-    img.style.cssText = 'width:100%; max-width:280px; display:block; margin:0 auto 16px; border-radius:16px; box-shadow:var(--sh)';
-    res.appendChild(img);
-    const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
-    const a = document.createElement('a'); a.href = url; a.download = fileSafe(expName) + '.gif';
-    a.className = 'btn ghost flex'; a.textContent = 'Save'; a.style.textDecoration = 'none';
-    row.appendChild(a);
-    try {
-      const file = new File([blob], fileSafe(expName) + '.gif', { type: 'image/gif' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        const sh = document.createElement('button'); sh.className = 'btn primary flex'; sh.textContent = 'Share';
-        sh.onclick = () => navigator.share({ files: [file], title: 'Aligno' }).catch(() => {});
-        row.appendChild(sh);
-      }
-    } catch (e) {}
-    res.appendChild(row);
-    btn.disabled = false; btn.textContent = 'Make again';
-  } catch (e) {
-    res.innerHTML = '<p class="note">Couldn’t create the GIF (' + ((e && e.message) || 'unknown') + '). Check your internet connection and try again.</p>';
-    btn.disabled = false; btn.textContent = 'Make GIF';
-  }
-}
 
 const remOptions = ['Off', 'Daily', 'Weekly', 'Monthly'];
 function renderRemOpts() {
@@ -1335,7 +1513,7 @@ function goBack() {
   if ($('cmpView').classList.contains('on')) { closeCompare(); return; }
   switch (state.screen) {
     case 'camera': case 'reminders': openProject(state.projectId); break;
-    case 'export': clearInterval(expTimer); openProject(state.projectId); break;
+    case 'export': openProject(state.projectId); break;
     case 'aligner': alCloseAligner(); break;
     case 'project': case 'settings': case 'landing': show('home'); renderHome(); break;
   }
@@ -1597,7 +1775,7 @@ function wire() {
     restoreBackup(f);
   });
 
-  $('exportBack').addEventListener('click', () => { clearInterval(expTimer); openProject(state.projectId); });
+  $('exportBack').addEventListener('click', () => { openProject(state.projectId); });
   $('remBack').addEventListener('click', () => openProject(state.projectId));
   $('remSave').addEventListener('click', saveReminder);
   $('remOpts').addEventListener('click', (e) => {
@@ -1693,9 +1871,19 @@ function wire() {
   $('zoom').addEventListener('input', function () { applyZoom(this.value); });
 
   $('fps').addEventListener('input', function () {
-    expFps = Math.round(this.value); $('fpsv').textContent = expFps + ' fps'; startExportPreview();
+    exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
   });
-  $('makeGifBtn').addEventListener('click', makeGif);
+  $('makeGifBtn').addEventListener('click', makeExport);
+  const segPick = (id, key) => $(id).addEventListener('click', e => {
+    const b = e.target.closest('[data-v]'); if (!b || b.disabled) return;
+    exp[key] = b.getAttribute('data-v'); saveExportPrefs(); syncExportUi(); startExportPreview();
+    $('gifResult').innerHTML = '';
+  });
+  segPick('expFormat', 'format');
+  segPick('expShape', 'shape');
+  [['expDates', 'dates'], ['expFade', 'fade'], ['expHold', 'hold']].forEach(([id, key]) => {
+    $(id).addEventListener('change', function () { exp[key] = this.checked; saveExportPrefs(); startExportPreview(); });
+  });
 
   $('updatePill').addEventListener('click', () => location.reload());
 

@@ -177,8 +177,22 @@
 
   .expcard{ background:var(--card); border:1px solid var(--line); border-radius:var(--r-card); box-shadow:var(--sh);
     padding:16px; margin-bottom:20px; }
-  .expstage{ width:100%; max-width:280px; margin:0 auto; aspect-ratio:3/4; background:var(--al-bg); border-radius:16px; overflow:hidden; }
-  .expstage img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .expstage{ display:flex; justify-content:center; }
+  .expstage canvas{ display:block; max-width:100%; max-height:36vh; width:auto; height:auto; border-radius:14px; background:var(--al-bg); }
+  .optcard{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:6px 16px; box-shadow:var(--sh); }
+  .optcard .slrow{ padding:12px 0; border-bottom:1px solid var(--line); }
+  .tgl{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; font-size:15px; cursor:pointer; }
+  .tgl + .tgl{ border-top:1px solid var(--line); }
+  .tgl input{ position:absolute; opacity:0; pointer-events:none; }
+  .tgl i{ position:relative; flex:none; width:46px; height:28px; border-radius:14px; background:var(--line2); transition:background .2s; }
+  .tgl i::after{ content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.22,.61,.36,1); }
+  .tgl input:checked + i{ background:var(--al); }
+  .tgl input:checked + i::after{ transform:translateX(18px); }
+  .tgl input:focus-visible + i{ outline:2px solid var(--al); outline-offset:2px; }
+  .seg button:disabled{ opacity:.4; cursor:default; }
+  .exp-out{ width:100%; max-width:300px; max-height:56vh; object-fit:contain; display:block; margin:0 auto; border-radius:16px; box-shadow:var(--sh); background:#000; }
+  .exp-info{ text-align:center; font-size:12.5px; color:var(--txt3); margin:10px 0 14px; }
   .spinner{ width:26px; height:26px; border:3px solid var(--line2); border-top-color:var(--al); border-radius:50%;
     animation:spin .7s linear infinite; margin:0 auto; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -537,17 +551,33 @@
   <section class="screen" id="screen-export">
     <div class="topbar">
       <button class="backbtn" id="exportBack" aria-label="Back"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-      <span class="ttl">Export as GIF</span>
+      <span class="ttl">Export</span>
     </div>
     <div class="content">
       <div class="expcard">
-        <div class="expstage"><img id="expFrame" alt=""></div>
-        <p style="text-align:center; font-size:12.5px; color:var(--txt3); margin:14px 0 0" id="expCount"></p>
+        <div class="expstage"><canvas id="expCanvas" width="1" height="1"></canvas></div>
+        <p style="text-align:center; font-size:12.5px; color:var(--txt3); margin:12px 0 0" id="expCount"></p>
       </div>
-      <div class="slrow" style="margin-bottom:6px">
-        <span class="lbl">Speed</span>
-        <input type="range" id="fps" min="1" max="10" value="3">
-        <span class="val" id="fpsv">3 fps</span>
+      <p class="sectlbl">Format</p>
+      <div class="seg" id="expFormat">
+        <button data-v="gif">GIF</button>
+        <button data-v="video">Video</button>
+      </div>
+      <p class="sectlbl">Shape</p>
+      <div class="seg" id="expShape">
+        <button data-v="original">Original</button>
+        <button data-v="square">Square</button>
+        <button data-v="story">Story 9:16</button>
+      </div>
+      <div class="optcard">
+        <div class="slrow">
+          <span class="lbl">Speed</span>
+          <input type="range" id="fps" min="1" max="10" value="3">
+          <span class="val" id="fpsv">3 fps</span>
+        </div>
+        <label class="tgl"><span>Date on each photo</span><input type="checkbox" id="expDates"><i></i></label>
+        <label class="tgl"><span>Smooth transitions</span><input type="checkbox" id="expFade"><i></i></label>
+        <label class="tgl"><span>Pause on the last photo</span><input type="checkbox" id="expHold" checked><i></i></label>
       </div>
       <div id="gifResult" style="margin-top:20px"></div>
     </div>
