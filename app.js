@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -323,6 +323,12 @@ async function openProject(id) {
     : '';
   const dueGo = $('dueGo');
   if (dueGo) dueGo.addEventListener('click', openCamera);
+  const iv = reminderInterval(p);
+  if (iv && last && !isDue(p, last)) {
+    const left = Math.ceil(iv - (Date.now() - last.ts) / 86400000);
+    $('dueBanner').innerHTML = '<p class="nextchip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
+      'Next photo ' + (left <= 1 ? 'within a day' : 'in ' + left + ' days') + ' · ' + String(p.reminder).toLowerCase() + ' reminder</p>';
+  }
 
   $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
   renderProjectHero(photos);
@@ -330,7 +336,9 @@ async function openProject(id) {
   const empty = $('projEmpty');
   if (!photos.length) {
     grid.innerHTML = '';
-    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo to start the series.</p></div>';
+    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo below — or start from photos you already have.</p>' +
+      '<div class="acts"><button class="btn ghost block" id="emptyImport"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>Import existing photos</button></div></div>';
+    $('emptyImport').addEventListener('click', () => beginImportForProject(id));
   } else {
     empty.innerHTML = '';
     grid.innerHTML = photos.map((ph, i) =>
@@ -1298,6 +1306,60 @@ function closePhotoView() {
   $('photoView').classList.remove('on');
   setTheme(state.screen === 'camera');
 }
+function localInputValue(ts) {
+  const d = new Date(ts), z = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + 'T' + z(d.getHours()) + ':' + z(d.getMinutes());
+}
+function openDateEdit() {
+  const ph = viewList[viewIndex];
+  if (!ph) return;
+  $('dateInput').value = localInputValue(ph.ts);
+  $('dateInput').max = localInputValue(Date.now());
+  $('dateModal').classList.add('on');
+}
+async function saveDateEdit() {
+  const ph = viewList[viewIndex];
+  const v = $('dateInput').value;
+  $('dateModal').classList.remove('on');
+  if (!ph || !v) return;
+  const ts = new Date(v).getTime();
+  if (!ts) return;
+  if (ph.dataUrl) {
+    const p = await dbGetProject(state.projectId);
+    const rec = p && p.photos && p.photos.find(x => x.id === ph.id);
+    if (rec) { rec.ts = ts; await dbPutProject(p); }
+  } else {
+    const rec = await reqP(store('photos', 'readonly').get(ph.id));
+    if (rec) { rec.ts = ts; await dbAddPhoto(rec); }
+  }
+  await openProject(state.projectId);
+  renderHome();
+  viewList = projPhotos;
+  const i = viewList.findIndex(x => x.id === ph.id);
+  openPhotoViewAt(i < 0 ? 0 : i);
+  toast('Date updated');
+}
+async function shareViewedPhoto() {
+  const ph = viewList[viewIndex];
+  if (!ph) return;
+  const blob = ph.blob || (ph.dataUrl ? dataUrlToBlob(ph.dataUrl) : null);
+  if (!blob) return;
+  const name = fileSafe($('projTitle').textContent) + '-' + isoDay(ph.ts) + '.jpg';
+  const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+  } catch (e) { return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function compareFromViewer() {
+  if (viewList.length < 2) { toast('Add another photo to compare'); return; }
+  const i = viewIndex;
+  closePhotoView();
+  openCompare(0, i === 0 ? viewList.length - 1 : i);
+}
+
 async function deleteViewedPhoto() {
   const ph = viewList[viewIndex];
   if (!ph || !state.projectId) return;
@@ -2094,6 +2156,12 @@ function wire() {
   $('pvPrev').addEventListener('click', () => openPhotoViewAt(viewIndex - 1));
   $('pvNext').addEventListener('click', () => openPhotoViewAt(viewIndex + 1));
   $('pvDelete').addEventListener('click', deleteViewedPhoto);
+  $('pvDate').addEventListener('click', openDateEdit);
+  $('pvShare').addEventListener('click', shareViewedPhoto);
+  $('pvCompare').addEventListener('click', compareFromViewer);
+  $('dateCancel').addEventListener('click', () => $('dateModal').classList.remove('on'));
+  $('dateSave').addEventListener('click', saveDateEdit);
+  $('dateModal').addEventListener('click', e => { if (e.target === $('dateModal')) $('dateModal').classList.remove('on'); });
   let tX = null, tY = null;
   $('photoView').addEventListener('touchstart', e => { tX = e.touches[0].clientX; tY = e.touches[0].clientY; }, { passive: true });
   $('photoView').addEventListener('touchend', e => {
