@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Aligno",
   "short_name": "Aligno",
-  "description": "Take the same photo, perfectly aligned, every time — and watch change happen.",
+  "description": "Take the same photo, perfectly aligned, every time, and watch change happen.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

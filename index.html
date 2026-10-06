@@ -19,7 +19,7 @@
     --sh:0 1px 2px rgba(10,10,20,.05), 0 4px 18px rgba(10,10,20,.045);
     --sh-btn:0 4px 18px rgba(91,95,239,.32);
     --r-card:20px; --r-btn:15px;
-    --glassL:rgba(255,255,255,.6); --glassL-b:rgba(255,255,255,.7);
+    --glassL:rgba(255,255,255,.6); --glassL-b:rgba(255,255,255,.88);
     --glow:var(--al-bg); --press:rgba(0,0,0,.06); --danger-t:#C6392F;
     --warn-bg:#FCEFD4; --warn-fg:#8A5A00; --warn-fg2:#6E4A02;
     --pill-bg:#0B0B10; --pill-fg:#fff;
@@ -294,6 +294,15 @@
   .set-row:active{ background:var(--neu); }
   .set-row .ri{ color:var(--al-d); display:flex; }
   .set-row .rt{ flex:1; font-size:15px; }
+  .cam-seg .seg-help{ flex:none; width:38px; font-size:15px; font-weight:700; color:#EDEDF2; }
+  .help-list{ display:flex; flex-direction:column; gap:14px; margin-bottom:18px; }
+  .help-row{ display:flex; gap:13px; align-items:flex-start; }
+  .help-row .hi{ width:38px; height:38px; border-radius:12px; background:var(--al-bg); color:var(--al-d); display:flex; align-items:center; justify-content:center; flex:none; }
+  .help-row b{ font-size:15px; font-weight:600; display:block; margin-bottom:2px; }
+  .help-row span{ font-size:13.5px; color:var(--txt2); line-height:1.45; }
+  .help-tips{ margin:0; padding-left:18px; font-size:13.5px; color:var(--txt2); line-height:1.55; }
+  .help-tips b{ color:var(--txt); font-weight:600; }
+  .pcard:focus-visible, .ptile:focus-visible, .btn:focus-visible, .set-row:focus-visible{ outline:2px solid var(--al); outline-offset:2px; }
   .nextchip{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--txt2); margin:0 0 14px; }
   .nextchip svg{ color:var(--al-d); flex:none; }
   .empty .acts{ display:flex; flex-direction:column; gap:10px; margin:22px auto 0; max-width:260px; }
@@ -455,7 +464,7 @@
       --bg:#0D0D12; --card:#17171E; --line:#25252E; --line2:#33333E;
       --txt:#F1F1F5; --txt2:#A3A3AF; --txt3:#6E6E7A; --neu:#1C1C24; --neu-d:#B4B4C0;
       --sh:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-btn:0 4px 18px rgba(108,112,246,.28);
-      --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.78);
+      --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.9);
       --glow:#1A1B36; --press:rgba(255,255,255,.08); --danger-t:#FF7A70;
       --warn-bg:#3A2D10; --warn-fg:#F4C66A; --warn-fg2:#F2D9A4;
       --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
@@ -467,7 +476,7 @@
     --bg:#0D0D12; --card:#17171E; --line:#25252E; --line2:#33333E;
     --txt:#F1F1F5; --txt2:#A3A3AF; --txt3:#6E6E7A; --neu:#1C1C24; --neu-d:#B4B4C0;
     --sh:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-btn:0 4px 18px rgba(108,112,246,.28);
-    --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.78);
+    --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.9);
     --glow:#1A1B36; --press:rgba(255,255,255,.08); --danger-t:#FF7A70;
     --warn-bg:#3A2D10; --warn-fg:#F4C66A; --warn-fg2:#F2D9A4;
     --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
@@ -488,25 +497,25 @@
           <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="#8C8FF6" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="var(--al)"/><path d="M24 20v8M20 24h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
         </div>
         <h1 class="landing-word">Aligno</h1>
-        <p class="landing-tag">Take the same photo, perfectly aligned, every time — so change over time becomes easy to see.</p>
+        <p class="landing-tag">Take the same photo, perfectly aligned, every time, so change over time is easy to see.</p>
       </div>
 
       <div class="ld-demo">
-        <p class="ld-demo-lbl">For example — a plant, growing</p>
+        <p class="ld-demo-lbl">For example: a plant, growing</p>
         <div class="ld-demo-strip" id="ldDemoStrip"></div>
-        <p class="ld-demo-cap">Or a build site, a haircut, a scar healing, your own progress. Anything that changes slowly.</p>
+        <p class="ld-demo-cap">Or a build site, a haircut, a scar healing, your own progress, the moon night after night. Anything that changes slowly.</p>
       </div>
 
       <p class="sectlbl">How it works</p>
       <div class="ld-steps">
         <div class="ld-step"><span class="num">1</span><div><b>Start a project</b><span>Give it a name and take your first photo.</span></div></div>
-        <div class="ld-step"><span class="num">2</span><div><b>Line it up next time</b><span>Your last shot appears as a ghost overlay on the live camera — match it, then tap the shutter.</span></div></div>
+        <div class="ld-step"><span class="num">2</span><div><b>Line it up next time</b><span>Your last shot appears as a ghost overlay on the live camera. Match it, then tap the shutter.</span></div></div>
         <div class="ld-step"><span class="num">3</span><div><b>Watch it happen</b><span>Slide between before and after, or turn the whole series into a smooth, aligned GIF.</span></div></div>
       </div>
 
       <div class="ld-trust">
         <div class="tchip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b>Private</b><span>Stays on this device</span></div>
-        <div class="tchip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg><b>Import photos</b><span>Or use ones you already have</span></div>
+        <div class="tchip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg><b>Import photos</b><span>Line up ones you already have</span></div>
       </div>
     </div>
     <div class="footer">
@@ -698,6 +707,7 @@
         <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Fade</button>
         <button data-om="edges" id="omEdges"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges</button>
         <button data-om="diff" id="omDiff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>Blend</button>
+        <button class="seg-help" id="camHelpBtn" aria-label="How aligning works">?</button>
       </div>
       <div class="cam-slwrap glass" id="opRow" style="display:none">
         <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
@@ -747,7 +757,7 @@
     </div>
     <div class="al-rot" id="alRotLbl"></div>
     <div class="cbadge" id="alBadge"></div>
-    <div class="camhint glass" id="alHint">Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate — or tap Auto-center for the moon and other bright subjects.</div>
+    <div class="camhint glass" id="alHint">Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate. Or tap Auto-center for the moon and other bright subjects.</div>
     <div class="cam-panel">
       <div class="al-tools">
         <button class="al-tool glass" id="alAuto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Auto-center</button>
@@ -793,7 +803,7 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>
       Import &amp; align existing photos
     </button>
-    <p class="import-hint">Already have photos — like a folder of moon shots? Import them and center your subject in each one.</p>
+    <p class="import-hint">Already have photos, like a folder of moon shots? Import them and center your subject in each one.</p>
   </div>
 </div>
 
@@ -872,6 +882,25 @@
   </div>
 </div>
 
+<div class="modal-bg" id="camHelpModal">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h3>Lining up your shot</h3>
+    <div class="help-list">
+      <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></span><div><b>Fade</b><span>Your last photo sits see-through on the live view. Use the Overlay slider to make it stronger or fainter.</span></div></div>
+      <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg></span><div><b>Edges</b><span>Only the outlines of your last photo, in pink. Easiest when the scene itself changed a lot.</span></div></div>
+      <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></span><div><b>Blend</b><span>Shows the difference. The darker the screen, the better you’re lined up. Move until it goes almost black.</span></div></div>
+    </div>
+    <p class="sectlbl" style="margin-top:6px">Handy extras</p>
+    <ul class="help-tips">
+      <li><b>Grid</b> also shows a level, so the phone is straight every time.</li>
+      <li><b>Timer</b> (top) gives you 3 or 10 seconds, handy for photos of yourself.</li>
+      <li><b>Photo icon</b> (top) lines up against any picture from your gallery instead.</li>
+    </ul>
+    <button class="btn primary block" id="camHelpOk" style="margin-top:16px">Got it</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="dateModal" style="z-index:70">
   <div class="sheet">
     <div class="grab"></div>
@@ -909,7 +938,7 @@
   </div>
 </div>
 
-<button class="update-pill" id="updatePill">Update ready — tap to refresh</button>
+<button class="update-pill" id="updatePill">Update ready. Tap to refresh</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>

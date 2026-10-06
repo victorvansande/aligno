@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v24';
+const CACHE = 'aligno-v25';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [
@@ -93,7 +93,7 @@ async function checkDue() {
   await meta.put('./notified', new Response(JSON.stringify(notified)));
   const names = fresh.map((d) => d.p.name);
   await self.registration.showNotification(fresh.length === 1 ? 'Time for a new photo' : fresh.length + ' projects are due', {
-    body: fresh.length === 1 ? 'Keep “' + names[0] + '” going — take today’s shot.' : names.join(', '),
+    body: fresh.length === 1 ? 'Keep “' + names[0] + '” going with today’s shot.' : names.join(', '),
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
     tag: 'aligno-due',

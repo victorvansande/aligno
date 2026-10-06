@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -218,7 +218,7 @@ async function renderHome() {
     const due = isDue(p, last) ? '<span class="duechip">Due</span>' : '';
     return '<div class="pswipe" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' +
       '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
-      '<div class="pcard" data-open="' + p.id + '">' + thumb +
+      '<div class="pcard" data-open="' + p.id + '" role="button" tabindex="0">' + thumb +
       '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
       '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
@@ -318,7 +318,7 @@ async function openProject(id) {
   $('dueBanner').innerHTML = isDue(p, last)
     ? '<div class="due-banner" id="dueGo">' +
       '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
-      '<span><b>Photo due.</b> Keep the series going — take the next shot.</span>' +
+      '<span><b>Photo due.</b> Keep the series going with the next shot.</span>' +
       '<span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>'
     : '';
   const dueGo = $('dueGo');
@@ -336,13 +336,13 @@ async function openProject(id) {
   const empty = $('projEmpty');
   if (!photos.length) {
     grid.innerHTML = '';
-    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo below — or start from photos you already have.</p>' +
+    empty.innerHTML = '<div class="empty"><div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>No photos yet</h3><p>Take your first photo below, or start from photos you already have.</p>' +
       '<div class="acts"><button class="btn ghost block" id="emptyImport"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>Import existing photos</button></div></div>';
     $('emptyImport').addEventListener('click', () => beginImportForProject(id));
   } else {
     empty.innerHTML = '';
     grid.innerHTML = photos.map((ph, i) =>
-      '<div class="ptile" data-i="' + i + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + urlFor(ph, 'thumb') + '" alt=""><span class="day">' + srcIcon(ph) + fmtDate(ph.ts) + '</span></div>'
+      '<div class="ptile" data-i="' + i + '" role="button" tabindex="0" aria-label="Photo from ' + fmtFullDate(ph.ts) + '" style="animation-delay:' + Math.min(i * 30, 300) + 'ms"><img src="' + urlFor(ph, 'thumb') + '" alt=""><span class="day">' + srcIcon(ph) + fmtDate(ph.ts) + '</span></div>'
     ).join('');
   }
   show('project');
@@ -643,6 +643,13 @@ function setOverlay(raw, source) {
   $('camhint').style.display = 'none';
   $('libChip').style.display = overlaySource === 'library' ? 'flex' : 'none';
   applyOverlay();
+  maybeShowCamHelp();
+}
+function maybeShowCamHelp() {
+  let seen = false; try { seen = !!localStorage.getItem('aligno_camhelp'); } catch (e) {}
+  if (seen || state.screen !== 'camera') return;
+  try { localStorage.setItem('aligno_camhelp', '1'); } catch (e) {}
+  setTimeout(() => { if (state.screen === 'camera') $('camHelpModal').classList.add('on'); }, 700);
 }
 async function loadLibraryOverlay(file) {
   if (!file) return;
@@ -792,6 +799,7 @@ async function openCamera() {
   syncModeSeg();
   if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
   show('camera');
+  if (last) maybeShowCamHelp();
   await startCamera();
   if (last && typeof last.zoom === 'number' && zoomTrack) {
     $('zoom').value = last.zoom;
@@ -910,7 +918,7 @@ async function capturePhoto() {
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
   setOverlay(urlFor(ph, 'full'));
-  camBadge('Photo ' + count + ' saved — now aligned to this');
+  camBadge('Photo ' + count + ' saved. Now aligned to this one');
 }
 
 function camBadge(text) {
@@ -1007,7 +1015,7 @@ function alCycleShape() {
 
 /* Auto-center: finds the largest bright region (the moon, a lamp, the sun…)
    and moves it under the crosshair, sized like the subject in the previous
-   aligned photo. Plain thresholding — no AI, works best on dark backgrounds. */
+   aligned photo. Plain thresholding (no AI), works best on dark backgrounds. */
 function alFindBrightSubject(img) {
   const coarse = brightBlob(img, 0, 0, img.naturalWidth, img.naturalHeight, true);
   if (!coarse) return null;
@@ -1448,7 +1456,7 @@ async function openExport() {
   exp.name = p.name;
   const n = exp.photos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
-    : n === 1 ? '1 photo — add at least one more to export'
+    : n === 1 ? '1 photo. Add at least one more to export'
     : n + ' photos · live preview';
   $('gifResult').innerHTML = '';
   if (!videoType()) {
@@ -1490,7 +1498,7 @@ function startExportPreview() {
 }
 
 /* Renders every photo once, cover-cropped to the export size, as a small JPEG
-   — keeps memory flat no matter how long the series is. */
+   so memory stays flat no matter how long the series is. */
 async function prepFrames(W, H, onStep) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
@@ -1774,7 +1782,7 @@ function wireHistory() {
 }
 
 /* --- Backup & restore: everything goes into a plain .zip (stored, not
-   compressed — JPEGs don't shrink anyway). Photos sit in one folder per
+   compressed, JPEGs don't shrink anyway). Photos sit in one folder per
    project so the backup is also browsable by hand; aligno-backup.json holds
    the metadata needed to restore it. --- */
 const CRC_T = (() => {
@@ -1898,7 +1906,7 @@ async function backupAll() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     try { localStorage.setItem('aligno_last_backup', String(Date.now())); } catch (e) {}
-    toast('Backup saved — ' + meta.photos.length + (meta.photos.length === 1 ? ' photo' : ' photos'));
+    toast('Backup saved: ' + meta.photos.length + (meta.photos.length === 1 ? ' photo' : ' photos'));
     renderBackupInfo();
   } catch (e) {
     toast('Backup failed: ' + ((e && e.message) || 'unknown error'), 4000);
@@ -2224,6 +2232,18 @@ function wire() {
   });
   wireCompare();
   wireHistory();
+
+  $('camHelpBtn').addEventListener('click', () => $('camHelpModal').classList.add('on'));
+  $('camHelpOk').addEventListener('click', () => $('camHelpModal').classList.remove('on'));
+  $('camHelpModal').addEventListener('click', e => { if (e.target === $('camHelpModal')) $('camHelpModal').classList.remove('on'); });
+
+  // Keyboard: anything acting as a button also works with Enter / Space.
+  document.querySelectorAll('.set-row').forEach(r => { r.setAttribute('role', 'button'); r.setAttribute('tabindex', '0'); });
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute && e.target.getAttribute('role') === 'button' && e.target.tagName !== 'BUTTON') {
+      e.preventDefault(); e.target.click();
+    }
+  });
 
   $('shareCancel').addEventListener('click', () => { $('shareModal').classList.remove('on'); sharedFiles = []; });
   $('shareModal').addEventListener('click', e => { if (e.target === $('shareModal')) { $('shareModal').classList.remove('on'); sharedFiles = []; } });
