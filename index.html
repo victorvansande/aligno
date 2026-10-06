@@ -272,6 +272,12 @@
   .set-row:active{ background:var(--neu); }
   .set-row .ri{ color:var(--al-d); display:flex; }
   .set-row .rt{ flex:1; font-size:15px; }
+  .set-row .rs{ display:block; font-size:12.5px; color:var(--txt3); margin-top:2px; }
+  .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); transform:translateX(-50%) translateY(12px);
+    background:var(--pill-bg); color:var(--pill-fg); border-radius:22px; padding:11px 18px; font-size:13.5px; font-weight:500;
+    z-index:90; opacity:0; pointer-events:none; transition:opacity .2s, transform .25s; white-space:nowrap; max-width:calc(100% - 32px);
+    overflow:hidden; text-overflow:ellipsis; box-shadow:0 8px 24px rgba(0,0,0,.22); }
+  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
   .set-row.danger .ri, .set-row.danger .rt{ color:var(--danger-t); }
   .set-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin-top:16px; line-height:1.7; }
 
@@ -566,6 +572,18 @@
       </div>
       <p class="sectlbl">Your library</p>
       <div class="stat-grid" id="statGrid"></div>
+      <div class="set-row" id="backupRow">
+        <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span>
+        <span class="rt">Back up all photos<span class="rs" id="backupSub">Not backed up yet</span></span>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="set-row" id="restoreRow">
+        <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg></span>
+        <span class="rt">Restore from backup<span class="rs">Pick an aligno-backup .zip file</span></span>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <input type="file" id="restoreInput" accept=".zip,application/zip" style="display:none">
+      <p class="sectlbl" style="margin-top:22px">More</p>
       <div class="set-row" id="introRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
         <span class="rt">Show intro again</span>
@@ -776,6 +794,7 @@
 </div>
 
 <button class="update-pill" id="updatePill">Update ready — tap to refresh</button>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>
 </body>

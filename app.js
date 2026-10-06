@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -1175,7 +1175,8 @@ async function openSettings() {
   const mb = bytes / 1048576;
   const mbLabel = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1);
   $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(count, 'photos') + statCard(mbLabel, 'MB used');
-  $('verLbl').textContent = 'Aligno ' + APP_VERSION + ' · web preview';
+  $('verLbl').textContent = 'Aligno ' + APP_VERSION;
+  renderBackupInfo();
   show('settings');
 }
 
@@ -1251,6 +1252,189 @@ function wireHistory() {
   });
 }
 
+/* --- Backup & restore: everything goes into a plain .zip (stored, not
+   compressed — JPEGs don't shrink anyway). Photos sit in one folder per
+   project so the backup is also browsable by hand; aligno-backup.json holds
+   the metadata needed to restore it. --- */
+const CRC_T = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function dosTime(d) {
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((Math.max(1980, d.getFullYear()) - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()
+  };
+}
+async function buildZip(entries, onStep) {
+  const parts = [], central = [];
+  let offset = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const en = entries[i];
+    const data = en.data instanceof Uint8Array ? en.data : new Uint8Array(await en.data.arrayBuffer());
+    const name = new TextEncoder().encode(en.name);
+    const crc = crc32(data), dt = dosTime(new Date(en.ts || Date.now()));
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, dt.time, true); lh.setUint16(12, dt.date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, dt.time, true); ch.setUint16(14, dt.date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    parts.push(lh.buffer, name, data);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length;
+    if (onStep) onStep(i + 1, entries.length);
+  }
+  const cdSize = central.reduce((s, p) => s + (p.byteLength || p.length), 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob(parts.concat(central, [end.buffer]), { type: 'application/zip' });
+}
+async function readZip(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error('Not a zip file');
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const files = new Map();
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nlen));
+    const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+    files.set(name, { method, raw: buf.subarray(start, start + csize) });
+    p += 46 + nlen + elen + clen;
+  }
+  return {
+    has: (n) => files.has(n),
+    async get(n) {
+      const f = files.get(n);
+      if (!f) return null;
+      if (f.method === 0) return f.raw;
+      if (f.method === 8 && typeof DecompressionStream !== 'undefined') {
+        const s = new Blob([f.raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return new Uint8Array(await new Response(s).arrayBuffer());
+      }
+      throw new Error('Unsupported compression');
+    }
+  };
+}
+function isoDay(ts) {
+  const d = new Date(ts), z = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+function toast(msg, ms) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(t._t);
+  if (ms !== 0) t._t = setTimeout(() => t.classList.remove('on'), ms || 2600);
+}
+let backupBusy = false;
+async function backupAll() {
+  if (backupBusy) return;
+  backupBusy = true;
+  try {
+    const projects = await dbProjects();
+    const meta = { app: 'aligno', format: 1, exportedAt: Date.now(), projects: [], photos: [] };
+    const entries = [];
+    const usedFolders = new Set();
+    for (const p of projects) {
+      let folder = fileSafe(p.name), k = 2;
+      while (usedFolders.has(folder)) folder = fileSafe(p.name) + '-' + (k++);
+      usedFolders.add(folder);
+      const rec = Object.assign({}, p); delete rec.photos;
+      meta.projects.push(rec);
+      const photos = await photosOf(p);
+      photos.forEach((ph, i) => {
+        const file = folder + '/' + String(i + 1).padStart(3, '0') + '_' + isoDay(ph.ts) + '.jpg';
+        const blob = ph.blob || (ph.dataUrl ? dataUrlToBlob(ph.dataUrl) : null);
+        if (!blob) return;
+        meta.photos.push({ id: ph.id, projectId: p.id, ts: ph.ts, src: ph.src || 'camera', zoom: ph.zoom, file });
+        entries.push({ name: file, data: blob, ts: ph.ts });
+      });
+    }
+    if (!meta.photos.length && !meta.projects.length) { toast('Nothing to back up yet'); return; }
+    entries.unshift({ name: 'aligno-backup.json', data: new TextEncoder().encode(JSON.stringify(meta)), ts: Date.now() });
+    toast('Preparing backup…', 0);
+    const zip = await buildZip(entries, (i, n) => { if (i % 5 === 0) toast('Preparing backup… ' + Math.round(i / n * 100) + '%', 0); });
+    const name = 'aligno-backup-' + isoDay(Date.now()) + '.zip';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    try { localStorage.setItem('aligno_last_backup', String(Date.now())); } catch (e) {}
+    toast('Backup saved — ' + meta.photos.length + (meta.photos.length === 1 ? ' photo' : ' photos'));
+    renderBackupInfo();
+  } catch (e) {
+    toast('Backup failed: ' + ((e && e.message) || 'unknown error'), 4000);
+  } finally { backupBusy = false; }
+}
+async function restoreBackup(file) {
+  if (!file) return;
+  try {
+    const zip = await readZip(file);
+    const raw = await zip.get('aligno-backup.json');
+    if (!raw) throw new Error('This zip isn’t an Aligno backup');
+    const meta = JSON.parse(new TextDecoder().decode(raw));
+    if (meta.app !== 'aligno') throw new Error('This zip isn’t an Aligno backup');
+    const np = meta.projects.length, nph = meta.photos.length;
+    const ok = await confirmSheet('Restore this backup?',
+      np + (np === 1 ? ' project' : ' projects') + ' with ' + nph + (nph === 1 ? ' photo' : ' photos') + ' from ' + fmtFullDate(meta.exportedAt) +
+      '. Your current projects stay; anything already on this device is kept as is.', 'Restore');
+    if (!ok) return;
+    toast('Restoring…', 0);
+    const existing = new Set((await dbProjects()).map(p => p.id));
+    for (const p of meta.projects) { if (!existing.has(p.id)) await dbPutProject(p); }
+    let done = 0;
+    for (const m of meta.photos) {
+      const bytes = await zip.get(m.file);
+      if (bytes) {
+        const blob = new Blob([bytes], { type: 'image/jpeg' });
+        let thumb = null;
+        try {
+          const im = await loadImage(URL.createObjectURL(blob));
+          const tw = 320, th = Math.max(1, Math.round(tw * im.naturalHeight / im.naturalWidth));
+          const tc = document.createElement('canvas'); tc.width = tw; tc.height = th;
+          tc.getContext('2d').drawImage(im, 0, 0, tw, th);
+          URL.revokeObjectURL(im.src);
+          thumb = await toBlobP(tc, 'image/jpeg', 0.7);
+        } catch (e) {}
+        const ph = { id: m.id, projectId: m.projectId, ts: m.ts, blob, src: m.src || 'camera' };
+        if (thumb) ph.thumb = thumb;
+        if (typeof m.zoom === 'number') ph.zoom = m.zoom;
+        await dbAddPhoto(ph);
+        dropUrls(m.id);
+      }
+      done++;
+      if (done % 5 === 0) toast('Restoring… ' + Math.round(done / nph * 100) + '%', 0);
+    }
+    toast('Restored ' + np + (np === 1 ? ' project' : ' projects'));
+    askPersistentStorage();
+    await renderHome();
+    openSettings();
+  } catch (e) {
+    toast((e && e.message) || 'Couldn’t read that file', 4000);
+  }
+}
+function renderBackupInfo() {
+  let last = 0; try { last = +localStorage.getItem('aligno_last_backup') || 0; } catch (e) {}
+  $('backupSub').textContent = last ? 'Last backup ' + fmtAgo(last) : 'Not backed up yet';
+}
+
 function askPersistentStorage() {
   try {
     if (navigator.storage && navigator.storage.persist) {
@@ -1298,6 +1482,13 @@ function wire() {
   $('settingsBtn').addEventListener('click', openSettings);
   $('introRow').addEventListener('click', () => { show('landing'); });
   $('wipeRow').addEventListener('click', wipeAllData);
+  $('backupRow').addEventListener('click', backupAll);
+  $('restoreRow').addEventListener('click', () => $('restoreInput').click());
+  $('restoreInput').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    restoreBackup(f);
+  });
 
   $('exportBack').addEventListener('click', () => { clearInterval(expTimer); openProject(state.projectId); });
   $('remBack').addEventListener('click', () => openProject(state.projectId));
