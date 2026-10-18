@@ -51,9 +51,27 @@ for name in COPY_FILES:
         if '—' in line:
             errors.append(f'{name}:{n}: em dash')
 
+# Rule 4 (DESIGN.md): no inline style attributes in the markup, and font
+# sizes and corner radii in the CSS only through the tokens.
+html = texts['index.html']
+css_start, css_end = html.find('<style>'), html.find('</style>')
+markup = html[:css_start] + html[css_end:]
+for m in re.finditer(r'<[a-zA-Z][^>]*\sstyle="', markup):
+    errors.append(f'index.html: inline style attribute near "{m.group(0)[:40]}"')
+css = html[css_start:css_end]
+css_line0 = html.count('\n', 0, css_start) + 1
+for m in re.finditer(r'font-size:\s*([^;}]+)', css):
+    v = m.group(1).strip()
+    if not v.startswith('var(--fs-') and v != '120px':
+        errors.append(f'index.html:{css_line0 + css.count(chr(10), 0, m.start())}: font-size {v} is not a --fs-* token')
+for m in re.finditer(r'border-radius:\s*([^;}]+)', css):
+    v = m.group(1).strip()
+    if any(p not in ('0', '50%') and not p.startswith('var(--r-') for p in v.split()):
+        errors.append(f'index.html:{css_line0 + css.count(chr(10), 0, m.start())}: border-radius {v} is not a --r-* token')
+
 if errors:
     print('check failed:')
     for e in errors:
         print('  ' + e)
     sys.exit(1)
-print(f'check ok: {app_v.group(1)}, {len(ids)} ids, no BOM, no em dashes')
+print(f'check ok: {app_v.group(1)}, {len(ids)} ids, no BOM, no em dashes, design tokens respected')

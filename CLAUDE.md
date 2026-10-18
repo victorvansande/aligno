@@ -13,6 +13,7 @@ Progress camera PWA: take the same photo over time, lined up with a ghost overla
 
 ## Rules for every change
 
+0. **Read [DESIGN.md](DESIGN.md) first and follow it.** It is the rulebook for colors, type, spacing, radii, components, copy, app feel and code structure. Code that breaks it gets fixed when you touch it. `tools/check.py` enforces part of it (tokens for font sizes and radii, no inline styles).
 1. **Bump the version on every deploy, in both places**: `APP_VERSION = 'vNN'` at the top of `app.js` and `CACHE = 'aligno-vNN'` at the top of `sw.js`. They must match. Without the bump, installed apps keep serving the old cached files.
 2. **Element IDs**: `wire()` in `app.js` attaches listeners with `$('id')`. If you rename or remove an element in `index.html`, update `app.js` too, or one null `addEventListener` stops the whole app.
 3. **Copy**: English UI text, plain and direct. Never use em dashes or typical AI phrasing ("seamless", "elevate", "delve" and the like). Use commas, periods or colons instead.

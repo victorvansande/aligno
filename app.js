@@ -1,6 +1,7 @@
 'use strict';
 
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
+/* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -76,6 +77,7 @@ function dropUrls(id) {
   });
 }
 
+/* --- Small helpers: ids, DOM lookup, dates, escaping. --- */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const $ = (id) => document.getElementById(id);
 
@@ -103,6 +105,7 @@ function fmtFullDate(ts) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+/* --- Photo origin badges (taken in app vs imported). --- */
 function isImported(ph) { return ph && ph.src === 'import'; }
 function srcIcon(ph) {
   return isImported(ph)
@@ -111,6 +114,7 @@ function srcIcon(ph) {
 }
 function srcLabel(ph) { return isImported(ph) ? 'Imported' : 'Taken in app'; }
 
+/* --- Illustrations for examples, the landing demo and empty states. --- */
 function plantIll(g) {
   const sh = 6 + g * 22, top = 30 - sh, n = Math.max(1, Math.round(1 + g * 3));
   let lv = '';
@@ -148,6 +152,7 @@ function renderLandingDemo() {
   if (el) el.innerHTML = strip([plantIll(0.16), plantIll(0.55), plantIll(1)]);
 }
 
+/* --- App state, theme and screen navigation. --- */
 const state = { screen: 'landing', projectId: null, overlayMode: 'photo' };
 
 function themePref() { try { return localStorage.getItem('aligno_theme') || 'system'; } catch (e) { return 'system'; } }
@@ -188,6 +193,7 @@ function show(name) {
   if (typeof syncHistory === 'function' && $('photoView')) syncHistory();
 }
 
+/* --- Home: project list, due badges, swipe to delete. --- */
 function reminderInterval(p) {
   return { daily: 1, weekly: 7, monthly: 30 }[String((p && p.reminder) || '').toLowerCase()] || 0;
 }
@@ -219,7 +225,7 @@ async function renderHome() {
     return '<div class="pswipe" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' +
       '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
       '<div class="pcard" data-open="' + p.id + '" role="button" tabindex="0">' + thumb +
-      '<div style="flex:1; min-width:0"><div class="nm">' + escapeHtml(p.name) + '</div>' +
+      '<div class="grow"><div class="nm">' + escapeHtml(p.name) + '</div>' +
       '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
@@ -304,6 +310,7 @@ async function deleteProjectFromHome(id) {
   renderHome();
 }
 
+/* --- Project screen: hero, photo grid, due banner. --- */
 let projPhotos = [];
 
 async function openProject(id) {
@@ -317,7 +324,7 @@ async function openProject(id) {
 
   $('dueBanner').innerHTML = isDue(p, last)
     ? '<div class="due-banner" id="dueGo">' +
-      '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
+      '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
       '<span><b>Photo due.</b> Keep the series going with the next shot.</span>' +
       '<span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>'
     : '';
@@ -478,6 +485,7 @@ function wireCompare() {
   window.addEventListener('resize', () => { if ($('cmpView').classList.contains('on')) cmpFit(); });
 }
 
+/* --- Sheets: new project, confirm, project menu, rename. --- */
 let newProjectAfterCreate = false;
 function openNewProjectModal(thenCamera) {
   newProjectAfterCreate = !!thenCamera;
@@ -552,6 +560,7 @@ async function saveRename() {
   $('renModal').classList.remove('on');
 }
 
+/* --- Camera: live view, overlay modes (Fade, Edges, Blend), zoom, timer, level, capture. --- */
 let stream = null, facing = 'environment', gridMode = 0, camHasOverlay = false;
 let overlayRaw = null, overlayEdge = null, zoomTrack = null;
 
@@ -630,18 +639,18 @@ let overlaySource = 'project';
 function hideOverlay() {
   overlayRaw = null; overlayEdge = null; camHasOverlay = false; overlaySource = 'project';
   const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges'); ov.classList.remove('diff');
-  $('opRow').style.display = 'none'; $('modeSeg').style.display = 'none';
-  $('camLastThumb').style.display = 'none'; $('camhint').style.display = 'block';
-  $('libChip').style.display = 'none';
+  $('opRow').hidden = true; $('modeSeg').hidden = true;
+  $('camLastThumb').hidden = true; $('camhint').hidden = false;
+  $('libChip').hidden = true;
 }
 function setOverlay(raw, source) {
   overlayRaw = raw; overlayEdge = null; camHasOverlay = true;
   overlaySource = source || 'project';
   $('op').value = camPrefs.op; $('opv').textContent = camPrefs.op + '%';
-  $('opRow').style.display = 'flex'; $('modeSeg').style.display = 'flex';
-  $('camLastThumb').src = raw; $('camLastThumb').style.display = 'block';
-  $('camhint').style.display = 'none';
-  $('libChip').style.display = overlaySource === 'library' ? 'flex' : 'none';
+  $('opRow').hidden = false; $('modeSeg').hidden = false;
+  $('camLastThumb').src = raw; $('camLastThumb').hidden = false;
+  $('camhint').hidden = true;
+  $('libChip').hidden = overlaySource !== 'library';
   applyOverlay();
   maybeShowCamHelp();
 }
@@ -837,9 +846,9 @@ function setupZoom() {
     try { const s = track.getSettings(); if (typeof s.zoom === 'number') cur = s.zoom; } catch (e) {}
     z.value = cur;
     $('zoomv').textContent = Number(cur).toFixed(1) + '×';
-    row.style.display = 'flex';
+    row.hidden = false;
   } else {
-    row.style.display = 'none';
+    row.hidden = true;
   }
 }
 async function applyZoom(v) {
@@ -865,6 +874,7 @@ async function startCamera() {
     $('screen-camera').classList.toggle('mirror', facing === 'user');
     await $('video').play();
     setupZoom();
+    keepAwake(true);
     syncGridLevel();
     err.classList.remove('on');
   } catch (e) {
@@ -878,6 +888,7 @@ async function startCamera() {
 }
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  keepAwake(false);
   zoomTrack = null;
   cancelCountdown();
   setLevel(false);
@@ -924,18 +935,18 @@ async function capturePhoto() {
 function camBadge(text) {
   const b = $('cbadge');
   b.textContent = text;
-  b.style.display = 'block';
+  b.hidden = false;
   b.style.animation = 'none';
   requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
-  clearTimeout(window._bt); window._bt = setTimeout(() => { b.style.display = 'none'; }, 2400);
+  clearTimeout(window._bt); window._bt = setTimeout(() => { b.hidden = true; }, 2400);
 }
 function alBadge(text) {
   const b = $('alBadge');
   b.textContent = text;
-  b.style.display = 'block';
+  b.hidden = false;
   b.style.animation = 'none';
   requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
-  clearTimeout(window._abt); window._abt = setTimeout(() => { b.style.display = 'none'; }, 2400);
+  clearTimeout(window._abt); window._abt = setTimeout(() => { b.hidden = true; }, 2400);
 }
 
 /* --- Align from library: import several existing photos and manually
@@ -981,7 +992,7 @@ function alRender() {
   $('alImg').style.transform = 'translate(calc(-50% + ' + alState.tx + 'px), calc(-50% + ' + alState.ty + 'px)) rotate(' + alState.rot + 'rad) scale(' + alState.scale + ')';
   const deg = Math.round(alState.rot * 180 / Math.PI);
   $('alRotLbl').textContent = deg ? (deg > 0 ? '+' : '') + deg + '°' : '';
-  $('alRotLbl').style.display = deg ? 'block' : 'none';
+  $('alRotLbl').hidden = !deg;
 }
 /* Zoom goes up to 24× (a small moon in a wide shot); the slider is
    logarithmic so the useful 1–3× range keeps fine control. */
@@ -1149,7 +1160,7 @@ async function alLoadCurrent() {
   const f = alState.files[alState.index];
   if (!f) { alFinish(); return; }
   $('alCount').textContent = (alState.index + 1) + ' of ' + alState.files.length;
-  $('alHint').style.display = alState.index === 0 ? 'block' : 'none';
+  $('alHint').hidden = alState.index !== 0;
 
   if (alState.objUrl) { try { URL.revokeObjectURL(alState.objUrl); } catch (e) {} }
   const url = URL.createObjectURL(f);
@@ -1173,7 +1184,7 @@ async function alLoadCurrent() {
   if (alState.ghostUrl && alState.ghostOn) { ghost.src = alState.ghostUrl; ghost.classList.add('on'); }
   else { ghost.classList.remove('on'); }
 
-  $('alPrevThumb').style.display = alState.ghostUrl ? 'block' : 'none';
+  $('alPrevThumb').hidden = !alState.ghostUrl;
   if (alState.ghostUrl) $('alPrevThumb').src = alState.ghostUrl;
 }
 
@@ -1246,7 +1257,7 @@ async function alBakeCurrent() {
 async function alUsePhoto() {
   const f = alState.files[alState.index];
   if (!f) return;
-  $('alUse').style.pointerEvents = 'none';
+  $('alUse').disabled = true;
   try {
     const baked = await alBakeCurrent();
     const ts = f._ts || f.lastModified || Date.now();
@@ -1259,7 +1270,7 @@ async function alUsePhoto() {
     if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
     alBadge('Aligned ' + alState.added + (alState.added === 1 ? ' photo' : ' photos'));
   } catch (e) {}
-  $('alUse').style.pointerEvents = '';
+  $('alUse').disabled = false;
   alState.index++;
   alLoadCurrent();
 }
@@ -1297,6 +1308,7 @@ function createProjectAndImport() {
   $('alignFilesInput').click();
 }
 
+/* --- Photo viewer: swipe through the series, fix dates, share, delete. --- */
 let viewList = [], viewIndex = 0;
 function openPhotoViewAt(i) {
   if (!viewList.length) return;
@@ -1305,8 +1317,8 @@ function openPhotoViewAt(i) {
   $('photoViewImg').src = urlFor(ph, 'full');
   $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
     ' <span class="pv-src">' + srcIcon(ph) + srcLabel(ph) + '</span>';
-  $('pvPrev').style.visibility = viewIndex > 0 ? 'visible' : 'hidden';
-  $('pvNext').style.visibility = viewIndex < viewList.length - 1 ? 'visible' : 'hidden';
+  $('pvPrev').hidden = viewIndex === 0;
+  $('pvNext').hidden = viewIndex >= viewList.length - 1;
   $('photoView').classList.add('on');
   setTheme(true);
 }
@@ -1718,7 +1730,7 @@ async function makeExport() {
     info.textContent = (out.ext === 'gif' ? 'GIF' : out.ext.toUpperCase() + ' video') + ' · ' + (mb >= 1 ? mb.toFixed(1) + ' MB' : Math.max(1, Math.round(out.blob.size / 1024)) + ' KB') +
       (out.ext === 'gif' ? ' · loops forever' : ' · series plays ' + videoLoops(expTimeline().total) + '×');
     res.appendChild(info);
-    const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
+    const row = document.createElement('div'); row.className = 'row';
     const a = document.createElement('a'); a.href = url; a.download = fname;
     a.className = 'btn ghost flex'; a.textContent = 'Save'; a.style.textDecoration = 'none';
     row.appendChild(a);
@@ -1760,12 +1772,13 @@ function fileSafe(name) {
 }
 
 
+/* --- Reminders and Settings. --- */
 const remOptions = ['Off', 'Daily', 'Weekly', 'Monthly'];
 function renderRemOpts() {
   $('remOpts').innerHTML = remOptions.map(o => {
     const on = o === state._rem;
     return '<div class="optrow' + (on ? ' on' : '') + '" data-rem="' + o + '"><span class="nm">' + o + '</span>' +
-      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--al-d)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
+      (on ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</div>';
   }).join('');
 }
 async function openReminders() {
@@ -1821,6 +1834,7 @@ async function wipeAllData() {
   show('landing');
 }
 
+/* --- Service worker updates. --- */
 function watchUpdates(reg) {
   if (!reg) return;
   reg.addEventListener('updatefound', () => {
@@ -2091,7 +2105,7 @@ async function openSharePicker(files) {
     const photos = await photosOf(p);
     const last = photos[photos.length - 1];
     return '<button class="share-pick" data-pid="' + p.id + '">' + (last ? '<img src="' + urlFor(last, 'thumb') + '" alt="">' : '<i class="ph"></i>') +
-      '<span style="flex:1; min-width:0"><b>' + escapeHtml(p.name) + '</b><span>' + photos.length + (photos.length === 1 ? ' photo' : ' photos') + '</span></span></button>';
+      '<span class="grow"><b>' + escapeHtml(p.name) + '</b><span>' + photos.length + (photos.length === 1 ? ' photo' : ' photos') + '</span></span></button>';
   }));
   $('shareList').innerHTML = rows.join('');
   $('shareName').value = '';
@@ -2152,6 +2166,7 @@ function askPersistentStorage() {
   } catch (e) {}
 }
 
+/* --- Wiring: every event listener of the static markup. --- */
 function wire() {
   $('startBtn').addEventListener('click', () => { try { localStorage.setItem('aligno_seen', '1'); } catch (e) {} show('home'); });
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
@@ -2381,11 +2396,48 @@ function wire() {
   }
 
   let deferred = null;
-  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').style.display = 'flex'; });
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').hidden = false; });
+  window.addEventListener('appinstalled', () => { deferred = null; $('installBtn').hidden = true; });
   $('installBtn').addEventListener('click', async () => {
-    if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('installBtn').style.display = 'none';
+    if (deferred) { deferred.prompt(); await deferred.userChoice; deferred = null; $('installBtn').hidden = true; return; }
+    $('iosInstallModal').classList.add('on');
   });
+  $('iosInstallOk').addEventListener('click', () => $('iosInstallModal').classList.remove('on'));
+  $('iosInstallModal').addEventListener('click', e => { if (e.target === $('iosInstallModal')) $('iosInstallModal').classList.remove('on'); });
+  if (IS_IOS && !isStandalone()) $('installBtn').hidden = false;
+
+  wireAppFeel();
 }
+
+/* --- App feel: on the home screen Aligno behaves like a native app. No pinch
+   or double-tap zoom, no long-press menus or text selection outside inputs,
+   and the screen stays on while the camera is open. --- */
+function isStandalone() {
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+function wireAppFeel() {
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#alViewport, #cmpStage')) e.preventDefault(); }, { passive: false });
+  window.addEventListener('wheel', e => { if (e.ctrlKey && !e.target.closest('#alViewport')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].indexOf(e.key) >= 0) e.preventDefault();
+  });
+  document.addEventListener('contextmenu', e => { if (!e.target.closest('input, textarea')) e.preventDefault(); });
+  document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });
+  document.documentElement.classList.toggle('standalone', isStandalone());
+}
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!on && wakeLock) {
+      const w = wakeLock; wakeLock = null; await w.release();
+    }
+  } catch (e) { wakeLock = null; }
+}
+function bootDone() { document.documentElement.classList.remove('booting'); }
 
 (async function init() {
   try {
@@ -2395,12 +2447,14 @@ function wire() {
     await renderHome();
     let seen = false; try { seen = !!localStorage.getItem('aligno_seen'); } catch (e) {}
     if (seen) show('home'); else setTheme(false);
-    askPersistentStorage();
     await handleLaunch();
+    bootDone();
+    askPersistentStorage();
     if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
       navigator.serviceWorker.register('sw.js').then(reg => { watchUpdates(reg); syncReminderJobs(); }).catch(() => {});
     }
   } catch (e) {
-    document.body.innerHTML = '<div style="padding:40px; font-family:sans-serif">Couldn’t start the app: ' + (e && e.message) + '</div>';
+    bootDone();
+    document.body.innerHTML = '<div class="empty"><h3>Couldn’t start Aligno</h3><p>' + escapeHtml((e && e.message) || 'Unknown error') + '. Close the app and open it again.</p></div>';
   }
 })();

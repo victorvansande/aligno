@@ -5,486 +5,532 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Aligno">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Aligno</title>
 <style>
+  /* Aligno styles. Every value comes from the tokens in section 1; the rules
+     behind them live in DESIGN.md. Sections: 1 tokens, 2 base, 3 layout,
+     4 components, 5 screens, 6 dark surfaces, 7 motion, 8 dark theme. */
+
+  /* ---- 1. Tokens ---- */
   :root{
-    --al:#5B5FEF; --al-d:#4145C7; --al-bg:#EEEEFD; --al-rgb:91,95,239; --ink:#0B0B10;
-    --bg:#FAFAFB; --card:#ffffff; --line:#EAEAEF; --line2:#DDDDE4;
-    --txt:#131318; --txt2:#65656F; --txt3:#9A9AA4;
-    --neu:#F3F3F6; --neu-d:#5D5D68;
-    --sh:0 1px 2px rgba(10,10,20,.05), 0 4px 18px rgba(10,10,20,.045);
-    --sh-btn:0 4px 18px rgba(91,95,239,.32);
-    --r-card:20px; --r-btn:15px;
-    --glassL:rgba(255,255,255,.6); --glassL-b:rgba(255,255,255,.88);
-    --glow:var(--al-bg); --press:rgba(0,0,0,.06); --danger-t:#C6392F;
-    --warn-bg:#FCEFD4; --warn-fg:#8A5A00; --warn-fg2:#6E4A02;
-    --pill-bg:#0B0B10; --pill-fg:#fff;
+    --accent:#5B5FEF; --accent-strong:#4145C7; --accent-soft:#EEEEFD; --accent-rgb:91,95,239;
+    --bg:#FAFAFB; --surface:#FFFFFF; --surface-2:#F3F3F6; --line:#EAEAEF; --line-strong:#DDDDE4;
+    --text:#131318; --text-2:#65656F; --text-3:#9A9AA4;
+    --danger:#D93B30; --danger-text:#C6392F;
+    --warn-bg:#FCEFD4; --warn-text:#6E4A02; --warn-strong:#8A5A00;
+    --ink:#0B0B10; --on-dark:#FFFFFF; --on-dark-2:#EDEDF2; --on-dark-3:#A6A6B0;
+    --glass-dark:rgba(28,30,33,.42); --glass-light:rgba(255,255,255,.88);
+    --scrim:rgba(11,11,16,.44); --press:rgba(0,0,0,.06); --glow:var(--accent-soft);
+    --pill-bg:#0B0B10; --pill-fg:#FFFFFF;
+    --level:#FFD43B; --level-ok:#49E08A;
+
+    --fs-display:30px; --fs-title:20px; --fs-headline:17px; --fs-control:16px;
+    --fs-body:15px; --fs-sub:13px; --fs-label:12px; --fs-micro:11px;
+    --lh-tight:1.2; --lh-snug:1.4; --lh-body:1.5;
+
+    --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px;
+    --gutter:var(--s-4);
+
+    --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:22px; --r-xl:28px; --r-pill:999px;
+
+    --sh-1:0 1px 2px rgba(10,10,20,.04), 0 6px 20px rgba(10,10,20,.05);
+    --sh-2:0 8px 32px rgba(10,10,20,.16);
+    --sh-accent:0 4px 16px rgba(var(--accent-rgb),.30);
+
+    --h-control:52px; --h-row:56px; --h-seg:44px; --tap:44px;
+
+    --t-fast:120ms; --t-base:200ms; --t-slow:320ms; --ease:cubic-bezier(.22,.61,.36,1);
     color-scheme:light;
   }
+
+  /* ---- 2. Base ---- */
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body{ margin:0; height:100%; background:var(--bg); color:var(--txt);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif; overflow:hidden;
-    -webkit-font-smoothing:antialiased; }
-  button{ font-family:inherit; }
+  [hidden]{ display:none !important; }
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; touch-action:manipulation; }
+  html, body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; background:var(--bg); color:var(--text);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size:var(--fs-body); line-height:var(--lh-body); -webkit-font-smoothing:antialiased; }
+  body{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  input, textarea{ -webkit-user-select:text; user-select:text; }
+  img{ -webkit-user-drag:none; }
+  button{ font:inherit; color:inherit; }
+  h1, h2, h3, p{ margin:0; }
+  .booting .app{ visibility:hidden; }
+  .icon{ width:22px; height:22px; flex:none; }
+
+  /* ---- 3. Layout ---- */
   .app{ position:fixed; inset:0; display:flex; flex-direction:column; }
   .screen{ position:absolute; inset:0; display:none; flex-direction:column;
     background:radial-gradient(ellipse 120% 55% at 50% -8%, var(--glow) 0%, var(--bg) 58%); }
   .screen.active{ display:flex; }
+  .topbar{ display:flex; align-items:center; gap:var(--s-1); min-height:calc(env(safe-area-inset-top) + 64px);
+    padding:calc(env(safe-area-inset-top) + var(--s-3)) var(--gutter) var(--s-2); }
+  .topbar .ttl{ flex:1; min-width:0; font-size:var(--fs-title); font-weight:600; line-height:var(--lh-tight); letter-spacing:-.02em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .content{ flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+    padding:var(--s-2) var(--gutter) var(--s-6); }
+  .footer{ min-width:0; display:flex; flex-direction:column; gap:var(--s-3);
+    padding:var(--s-3) var(--gutter) calc(env(safe-area-inset-bottom) + var(--s-4));
+    background:linear-gradient(transparent, var(--bg) 34%); }
+  .row{ display:flex; gap:var(--s-3); width:100%; }
+  .grow{ flex:1; min-width:0; }
+  .mt-3{ margin-top:var(--s-3); } .mt-4{ margin-top:var(--s-4); } .mt-6{ margin-top:var(--s-6); }
+  .sheet-actions{ display:flex; gap:var(--s-3); margin-top:var(--s-5); }
 
-  .topbar{ display:flex; align-items:center; gap:6px;
-    padding:calc(env(safe-area-inset-top) + 16px) 18px 14px; }
-  .topbar .ttl{ font-size:19px; font-weight:600; letter-spacing:-.02em; flex:1; }
-  .backbtn,.tbtn{ background:none; border:none; color:var(--txt); cursor:pointer; display:flex;
-    align-items:center; justify-content:center; width:38px; height:38px; margin-left:-8px; border-radius:12px;
-    transition:background .1s; }
-  .tbtn{ margin:0 -8px 0 0; color:var(--txt2); }
-  .backbtn:active,.tbtn:active{ background:var(--press); }
-  .content{ flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:4px 18px 18px; }
-  .footer{ min-width:0; padding:14px 18px calc(env(safe-area-inset-bottom) + 16px);
-    background:linear-gradient(transparent, var(--bg) 34%); display:flex; flex-direction:column; gap:10px; }
+  /* ---- 4. Components ---- */
+  /* Text */
+  .sectlbl{ font-size:var(--fs-label); font-weight:600; letter-spacing:.02em; line-height:1.3; color:var(--text-3);
+    margin:var(--s-6) 0 var(--s-3); }
+  .sectlbl:first-child{ margin-top:0; }
+  .sub{ font-size:var(--fs-sub); color:var(--text-2); margin-bottom:var(--s-5); }
+  .note{ font-size:var(--fs-sub); color:var(--text-2); background:var(--surface-2); border-radius:var(--r-md); padding:var(--s-4); }
 
-  .brand{ display:flex; align-items:center; gap:10px; font-size:23px; font-weight:600; letter-spacing:-.03em; flex:1; }
-  .sub{ color:var(--txt2); font-size:14px; line-height:1.5; margin:0 0 22px; }
-  .sectlbl{ font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--txt3); margin:0 0 12px; }
-
-  .btn{ border:none; border-radius:var(--r-btn); padding:15px 16px; font-size:16px; font-weight:600; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; gap:9px; letter-spacing:-.01em; transition:transform .06s, background .15s; }
-  .btn:active{ transform:scale(.985); }
-  .btn.primary{ background:var(--al); color:#fff; box-shadow:var(--sh-btn); }
-  .btn.ghost{ background:var(--card); color:var(--txt); border:1px solid var(--line2); box-shadow:var(--sh); }
+  /* Buttons */
+  .btn{ min-height:var(--h-control); border:none; border-radius:var(--r-md); padding:0 var(--s-5); cursor:pointer;
+    font-size:var(--fs-control); font-weight:600; letter-spacing:-.01em; line-height:var(--lh-tight); text-decoration:none;
+    display:flex; align-items:center; justify-content:center; gap:var(--s-2);
+    transition:transform var(--t-fast) var(--ease), box-shadow var(--t-base); }
+  .btn:active{ transform:scale(.97); }
+  .btn:disabled{ opacity:.45; pointer-events:none; }
+  .btn .icon{ width:20px; height:20px; }
+  .btn.primary{ background:var(--accent); color:#fff; box-shadow:var(--sh-accent); }
+  .btn.ghost{ background:var(--surface); color:var(--text); border:1px solid var(--line-strong); box-shadow:var(--sh-1); }
+  .btn.danger{ background:var(--danger); color:#fff; }
   .btn.block{ width:100%; }
   .btn.flex{ flex:1; }
-  .btn .icon{ width:20px; height:20px; }
+  .backbtn, .tbtn{ width:var(--tap); height:var(--tap); flex:none; border:none; background:none; border-radius:var(--r-sm); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; color:var(--text);
+    transition:transform var(--t-fast) var(--ease), background var(--t-fast); }
+  .backbtn{ margin-left:-10px; }
+  .tbtn{ color:var(--text-2); margin-right:-10px; }
+  .tbtn + .tbtn{ margin-left:var(--s-2); }
+  .backbtn:active, .tbtn:active{ background:var(--press); transform:scale(.92); }
 
-  .pcard{ display:flex; align-items:center; gap:14px; padding:12px; border:1px solid var(--line);
-    border-radius:var(--r-card); cursor:pointer; margin-bottom:12px; background:var(--card); box-shadow:var(--sh);
-    transition:transform .08s; }
-  .pcard:active{ transform:scale(.99); }
-  .pswipe{ position:relative; overflow:hidden; border-radius:var(--r-card); margin-bottom:12px; touch-action:pan-y; }
-  .pswipe .pcard{ margin-bottom:0; position:relative; z-index:1; }
-  .pdel{ position:absolute; top:0; right:0; bottom:0; width:84px; border:none; background:#D93B30; color:#fff;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; font-size:11.5px;
-    font-weight:600; cursor:pointer; z-index:0; visibility:hidden; }
+  /* Cards, panels, rows */
+  .pswipe{ position:relative; overflow:hidden; border-radius:var(--r-lg); margin-bottom:var(--s-3); touch-action:pan-y; }
+  .pcard{ position:relative; z-index:1; display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3); cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1);
+    transition:transform var(--t-fast) var(--ease); }
+  .pcard:active{ transform:scale(.98); }
+  .pcard .nm{ font-size:var(--fs-headline); font-weight:600; letter-spacing:-.02em; line-height:var(--lh-tight);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pcard .mt{ font-size:var(--fs-sub); color:var(--text-2); margin-top:var(--s-1); }
+  .pthumb{ width:56px; height:56px; flex:none; border-radius:var(--r-sm); object-fit:cover; overflow:hidden;
+    background:var(--accent-soft); color:var(--accent-strong); display:flex; align-items:center; justify-content:center; }
+  .chev{ color:var(--text-3); display:flex; }
+  .pdel{ position:absolute; top:0; right:0; bottom:0; width:84px; z-index:0; visibility:hidden; border:none; cursor:pointer;
+    background:var(--danger); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s-1);
+    font-size:var(--fs-label); font-weight:600; }
   .pswipe.sw .pdel{ visibility:visible; }
-  .pthumb{ width:62px; height:62px; border-radius:15px; flex:none; background:var(--al-bg); object-fit:cover;
-    display:flex; align-items:center; justify-content:center; color:var(--al-d); overflow:hidden; }
-  .pcard .nm{ font-size:16.5px; font-weight:600; letter-spacing:-.01em; }
-  .pcard .mt{ font-size:13.5px; color:var(--txt2); margin-top:2px; }
-  .chev{ color:var(--txt3); display:flex; }
 
-  .empty{ text-align:center; padding:60px 24px; color:var(--txt2); }
-  .empty .ic{ width:76px; height:76px; border-radius:24px; background:var(--al-bg); color:var(--al-d);
-    display:flex; align-items:center; justify-content:center; margin:0 auto 20px; }
-  .empty h3{ font-size:18px; font-weight:600; color:var(--txt); margin:0 0 7px; letter-spacing:-.01em; }
-  .empty p{ font-size:14.5px; line-height:1.55; margin:0 auto; max-width:250px; }
+  .panel, .hero, .set-card, .ld-demo{ background:var(--surface-2); border-radius:var(--r-lg); padding:var(--s-4); }
 
-  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-  .ptile{ position:relative; border-radius:15px; overflow:hidden; background:var(--al-bg); aspect-ratio:1; box-shadow:var(--sh); }
-  .ptile img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .ptile .day{ position:absolute; left:0; right:0; bottom:0; font-size:11px; font-weight:500; color:#fff; padding:10px 8px 6px;
-    background:linear-gradient(transparent,rgba(0,0,0,.5)); display:flex; align-items:center; gap:4px; }
+  .set-row, .optrow{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-row); padding:var(--s-3) var(--s-4);
+    margin-bottom:var(--s-3); cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
+    transition:transform var(--t-fast) var(--ease), background var(--t-fast); }
+  .set-row:active, .optrow:active{ transform:scale(.98); }
+  .set-row .ri{ color:var(--accent-strong); display:flex; }
+  .set-row .ri .icon, .set-row > .icon{ width:20px; height:20px; }
+  .set-row > .icon{ color:var(--text-3); }
+  .set-row .rt{ flex:1; min-width:0; font-size:var(--fs-body); line-height:var(--lh-snug); }
+  .set-row .rs{ display:block; font-size:var(--fs-sub); color:var(--text-3); margin-top:2px; }
+  .set-row.danger .ri, .set-row.danger .rt{ color:var(--danger-text); }
+  .optrow{ justify-content:space-between; }
+  .optrow .nm{ font-size:var(--fs-body); font-weight:500; }
+  .optrow .icon{ color:var(--accent-strong); width:20px; height:20px; }
+  .optrow.on{ border-color:var(--accent); background:var(--accent-soft); }
+
+  /* Segmented control, toggle, slider, field */
+  .seg{ display:flex; gap:var(--s-1); padding:var(--s-1); min-height:var(--h-seg); border-radius:var(--r-md); background:var(--surface-2); }
+  .seg button{ flex:1; border:none; background:transparent; border-radius:var(--r-sm); cursor:pointer; padding:0 var(--s-2);
+    font-size:var(--fs-body); font-weight:500; color:var(--text-2); display:flex; align-items:center; justify-content:center; gap:var(--s-2);
+    transition:background var(--t-base), color var(--t-base); }
+  .seg button.on{ background:var(--surface); color:var(--text); font-weight:600; box-shadow:var(--sh-1); }
+  .seg button:disabled{ opacity:.4; cursor:default; }
+
+  .tgl{ display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-height:var(--h-row); cursor:pointer; font-size:var(--fs-body); }
+  .tgl + .tgl{ border-top:1px solid var(--line); }
+  .tgl input{ position:absolute; opacity:0; pointer-events:none; }
+  .tgl i{ position:relative; flex:none; width:46px; height:28px; border-radius:var(--r-pill); background:var(--line-strong); transition:background var(--t-base); }
+  .tgl i::after{ content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform var(--t-base) var(--ease); }
+  .tgl input:checked + i{ background:var(--accent); }
+  .tgl input:checked + i::after{ transform:translateX(18px); }
+  .tgl input:focus-visible + i{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .slrow{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-row); }
+  .slrow .lbl{ font-size:var(--fs-body); color:var(--text-2); white-space:nowrap; }
+  .slrow .val{ font-size:var(--fs-body); font-weight:600; min-width:48px; text-align:right; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; flex:1; height:4px; margin:0; border-radius:var(--r-pill); background:var(--line-strong); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:26px; height:26px; border-radius:50%; background:#fff; border:1px solid var(--line-strong); box-shadow:0 1px 4px rgba(0,0,0,.18); }
+  input[type=range]::-moz-range-thumb{ width:24px; height:24px; border-radius:50%; background:#fff; border:1px solid var(--line-strong); box-shadow:0 1px 4px rgba(0,0,0,.18); }
+
+  .field{ width:100%; min-height:var(--h-control); padding:0 var(--s-4); border:1px solid var(--line-strong); border-radius:var(--r-md);
+    background:var(--surface); color:var(--text); font:inherit; font-size:var(--fs-control); }
+  .field:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+
+  .optcard{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:0 var(--s-4); box-shadow:var(--sh-1); }
+  .optcard .slrow{ border-bottom:1px solid var(--line); }
+
+  /* Sheets */
+  .modal-bg{ position:fixed; inset:0; z-index:40; display:none; align-items:flex-end;
+    background:var(--scrim); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+  .modal-bg.on{ display:flex; }
+  .modal-bg.top{ z-index:70; }
+  .sheet{ width:100%; max-height:90vh; overflow-y:auto; overscroll-behavior:contain;
+    padding:var(--s-3) var(--s-5) calc(env(safe-area-inset-bottom) + var(--s-5));
+    background:var(--glass-light); backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
+    border-radius:var(--r-xl) var(--r-xl) 0 0; box-shadow:var(--sh-2); }
+  .sheet .grab{ width:36px; height:5px; border-radius:var(--r-pill); background:var(--line-strong); margin:0 auto var(--s-4); }
+  .sheet h3{ font-size:var(--fs-title); font-weight:600; letter-spacing:-.02em; line-height:var(--lh-tight); margin-bottom:var(--s-3); }
+  .sheet-sub{ font-size:var(--fs-sub); color:var(--text-2); margin-bottom:var(--s-4); }
+  .sheet .set-row:last-of-type{ margin-bottom:var(--s-4); }
+
+  /* Chips, badges, toast, tips, empty states */
+  .duechip{ display:inline-flex; align-items:center; margin-left:var(--s-2); padding:2px var(--s-2); vertical-align:1px;
+    border-radius:var(--r-pill); background:var(--warn-bg); color:var(--warn-strong); font-size:var(--fs-micro); font-weight:600; }
+  .tip{ display:flex; gap:var(--s-2); align-items:flex-start; margin-top:var(--s-3); padding:var(--s-3);
+    border-radius:var(--r-md); background:var(--accent-soft); color:var(--accent-strong); font-size:var(--fs-sub); }
+  .tip svg{ flex:none; margin-top:2px; }
+  .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); z-index:90; max-width:calc(100% - 2 * var(--gutter));
+    padding:var(--s-3) var(--s-5); border-radius:var(--r-pill); background:var(--pill-bg); color:var(--pill-fg); box-shadow:var(--sh-2);
+    font-size:var(--fs-sub); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    opacity:0; pointer-events:none; transform:translateX(-50%) translateY(12px); transition:opacity var(--t-base), transform var(--t-slow) var(--ease); }
+  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .update-pill{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + var(--s-4)); z-index:80; cursor:pointer; border:none;
+    padding:var(--s-3) var(--s-5); border-radius:var(--r-pill); background:var(--pill-bg); color:var(--pill-fg); box-shadow:var(--sh-2);
+    font-size:var(--fs-sub); font-weight:600; transform:translateX(-50%) translateY(120px); transition:transform var(--t-slow) var(--ease); }
+  .update-pill.on{ transform:translateX(-50%) translateY(0); }
+
+  .empty{ text-align:center; padding:var(--s-8) var(--s-6); color:var(--text-2); }
+  .empty .ic{ width:72px; height:72px; margin:0 auto var(--s-5); border-radius:var(--r-lg); background:var(--accent-soft); color:var(--accent-strong);
+    display:flex; align-items:center; justify-content:center; }
+  .empty h3{ font-size:var(--fs-headline); font-weight:600; letter-spacing:-.02em; line-height:var(--lh-tight); color:var(--text); margin-bottom:var(--s-2); }
+  .empty p{ font-size:var(--fs-sub); max-width:280px; margin:0 auto; }
+  .empty .acts{ display:flex; flex-direction:column; gap:var(--s-3); max-width:280px; margin:var(--s-5) auto 0; }
+  .empty-strip{ display:flex; align-items:center; justify-content:center; margin-bottom:var(--s-5); }
+  .empty-strip .ex-fr{ width:56px; height:56px; border-radius:var(--r-sm); }
+  .empty-strip .ex-ar{ font-size:var(--fs-title); margin:0 var(--s-2); }
+
+  /* Illustrated example strips (new project sheet, landing, empty home) */
+  .examples{ display:flex; flex-direction:column; gap:var(--s-2); margin-bottom:var(--s-3); }
+  .ex{ display:flex; align-items:center; gap:var(--s-3); width:100%; min-height:var(--h-row); padding:var(--s-2) var(--s-3); text-align:left; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
+    transition:transform var(--t-fast) var(--ease), border-color var(--t-base), background var(--t-base); }
+  .ex:active{ transform:scale(.98); }
+  .ex.sel{ border-color:var(--accent); background:var(--accent-soft); }
+  .ex-strip{ display:flex; align-items:center; flex:none; }
+  .ex-fr{ width:34px; height:34px; border-radius:var(--r-xs); overflow:hidden; display:inline-flex; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+  .ex-fr svg{ width:100%; height:100%; display:block; }
+  .ex-ar{ color:var(--text-3); margin:0 var(--s-1); font-size:var(--fs-body); line-height:1; }
+  .ex-txt b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
+  .ex-txt span{ font-size:var(--fs-sub); color:var(--text-2); }
+
+  .pcard:focus-visible, .ptile:focus-visible, .btn:focus-visible, .set-row:focus-visible, .ex:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ---- 5. Screens ---- */
+  /* Landing */
+  .ld-hero{ text-align:center; padding:var(--s-5) var(--s-1) 0; }
+  .landing-logo{ width:72px; height:72px; margin:0 auto var(--s-4); }
+  .landing-logo svg{ width:100%; height:100%; }
+  .landing-word{ font-size:var(--fs-display); font-weight:600; letter-spacing:-.03em; line-height:1.15; margin-bottom:var(--s-2); }
+  .landing-tag{ font-size:var(--fs-body); color:var(--text-2); max-width:300px; margin:0 auto; }
+  .ld-demo{ text-align:center; margin:var(--s-6) 0; padding:var(--s-5) var(--s-4); }
+  .ld-demo-lbl{ font-size:var(--fs-label); font-weight:600; letter-spacing:.02em; color:var(--accent-strong); margin-bottom:var(--s-3); }
+  .ld-demo-strip{ display:flex; align-items:center; justify-content:center; margin-bottom:var(--s-3); }
+  .ld-demo-strip .ex-fr{ width:64px; height:64px; border-radius:var(--r-sm); box-shadow:0 2px 8px rgba(10,10,20,.08); }
+  .ld-demo-strip .ex-ar{ font-size:var(--fs-control); margin:0 var(--s-2); }
+  .ld-demo-cap{ font-size:var(--fs-sub); color:var(--text-2); }
+  .ld-steps, .set-card{ display:flex; flex-direction:column; gap:var(--s-4); }
+  .ld-step, .set-step{ display:flex; gap:var(--s-3); align-items:flex-start; }
+  .ld-step .num, .set-step .num{ width:28px; height:28px; flex:none; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:var(--fs-sub); font-weight:600; display:flex; align-items:center; justify-content:center; }
+  .ld-step b, .set-step b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
+  .ld-step span, .set-step span{ font-size:var(--fs-sub); color:var(--text-2); line-height:var(--lh-snug); }
+  .ld-trust{ display:flex; gap:var(--s-3); margin-top:var(--s-6); }
+  .tchip{ flex:1; min-width:0; text-align:center; padding:var(--s-4) var(--s-3);
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--sh-1); }
+  .tchip svg{ color:var(--accent-strong); margin-bottom:var(--s-2); }
+  .tchip b{ display:block; font-size:var(--fs-sub); font-weight:600; margin-bottom:2px; }
+  .tchip span{ font-size:var(--fs-micro); color:var(--text-2); }
+  .landing-foot{ text-align:center; font-size:var(--fs-label); color:var(--text-3); }
+
+  /* Home */
+  .brand{ flex:1; display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-title); font-weight:600; letter-spacing:-.02em; }
+
+  /* Project */
+  .due-banner{ display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-4); padding:var(--s-3) var(--s-4); cursor:pointer;
+    border-radius:var(--r-md); background:var(--warn-bg); color:var(--warn-text); font-size:var(--fs-sub); line-height:var(--lh-snug); }
+  .due-banner svg{ flex:none; }
+  .due-banner b{ font-weight:600; }
+  .due-banner .go{ margin-left:auto; color:var(--warn-strong); display:flex; flex:none; }
+  .nextchip{ display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-4); font-size:var(--fs-sub); color:var(--text-2); }
+  .nextchip svg{ color:var(--accent-strong); flex:none; }
+  .hero{ margin-bottom:var(--s-6); }
+  .hero-row{ display:flex; align-items:center; gap:var(--s-2); cursor:pointer; }
+  .hero-fig{ margin:0; flex:1; min-width:0; }
+  .hero-fig img{ display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--r-sm); }
+  .hero-fig figcaption{ display:flex; align-items:center; justify-content:center; gap:var(--s-1); margin-top:var(--s-2);
+    font-size:var(--fs-label); font-weight:500; color:var(--text-2); }
+  .hero-ar{ color:var(--accent); flex:none; display:flex; }
+  .hero-stats{ display:flex; margin-top:var(--s-4); padding-top:var(--s-3); border-top:1px solid var(--line); }
+  .hero-stats .stat{ flex:1; text-align:center; }
+  .hero-stats .stat + .stat{ border-left:1px solid var(--line); }
+  .hero-stats .stat b{ display:block; font-size:var(--fs-headline); font-weight:600; letter-spacing:-.02em; line-height:var(--lh-tight); }
+  .hero-stats .stat span{ font-size:var(--fs-micro); color:var(--text-2); }
+  .hero-cmp{ width:100%; min-height:var(--tap); margin-top:var(--s-3); border:none; border-radius:var(--r-sm); cursor:pointer;
+    background:var(--surface); color:var(--accent-strong); box-shadow:var(--sh-1); font-size:var(--fs-body); font-weight:600;
+    display:flex; align-items:center; justify-content:center; gap:var(--s-2); transition:transform var(--t-fast) var(--ease); }
+  .hero-cmp:active{ transform:scale(.98); }
+  .grid3{ display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--s-2); }
+  .ptile{ position:relative; aspect-ratio:1; overflow:hidden; cursor:pointer; border-radius:var(--r-md); background:var(--accent-soft); box-shadow:var(--sh-1); }
+  .ptile img{ display:block; width:100%; height:100%; object-fit:cover; }
+  .ptile .day{ position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; gap:var(--s-1); padding:var(--s-3) var(--s-2) var(--s-2);
+    background:linear-gradient(transparent, rgba(0,0,0,.5)); color:#fff; font-size:var(--fs-micro); font-weight:500; }
   .srcic{ display:inline-flex; flex:none; opacity:.92; }
 
-  .field{ width:100%; border:1px solid var(--line2); border-radius:14px; padding:14px; font-size:16px;
-    background:var(--card); color:var(--txt); }
-  .field:focus{ outline:none; border-color:var(--al); box-shadow:0 0 0 3px var(--al-bg); }
+  /* Export */
+  .expcard{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); padding:var(--s-4); }
+  .expstage{ display:flex; justify-content:center; }
+  .expstage canvas{ display:block; max-width:100%; max-height:36vh; width:auto; height:auto; border-radius:var(--r-sm); background:var(--accent-soft); }
+  .exp-count{ text-align:center; margin-top:var(--s-3); font-size:var(--fs-label); color:var(--text-3); }
+  .exp-result{ margin-top:var(--s-6); }
+  .exp-result .row{ margin-top:var(--s-4); }
+  .exp-out{ display:block; width:100%; max-width:300px; max-height:56vh; margin:0 auto; object-fit:contain; border-radius:var(--r-md); box-shadow:var(--sh-1); background:#000; }
+  .exp-info{ text-align:center; margin-top:var(--s-3); font-size:var(--fs-label); color:var(--text-3); }
 
-  .optrow{ display:flex; align-items:center; justify-content:space-between; padding:16px 16px; border:1px solid var(--line2);
-    border-radius:15px; margin-bottom:10px; cursor:pointer; background:var(--card); transition:transform .06s; }
-  .optrow:active{ transform:scale(.99); }
-  .optrow.on{ border-color:var(--al); background:var(--al-bg); }
-  .optrow .nm{ font-size:15.5px; font-weight:500; }
-  .note{ font-size:13.5px; color:var(--txt2); background:var(--neu); border-radius:14px; padding:14px; line-height:1.55; }
+  /* Settings */
+  .stat-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--s-2); margin-bottom:var(--s-3); }
+  .stat-card{ text-align:center; padding:var(--s-4) var(--s-2); border-radius:var(--r-md); background:var(--surface-2); }
+  .stat-card b{ display:block; font-size:var(--fs-title); font-weight:600; letter-spacing:-.02em; line-height:var(--lh-tight); }
+  .stat-card span{ font-size:var(--fs-micro); color:var(--text-2); }
+  .set-foot{ text-align:center; margin-top:var(--s-6); font-size:var(--fs-label); color:var(--text-3); line-height:1.7; }
 
-  .slrow{ display:flex; align-items:center; gap:14px; }
-  .slrow .lbl{ font-size:14px; color:var(--txt2); white-space:nowrap; }
-  .slrow .val{ font-size:14px; font-weight:600; min-width:44px; text-align:right; }
-  input[type=range]{ -webkit-appearance:none; appearance:none; flex:1; height:5px; border-radius:5px; background:var(--line2); outline:none; }
-  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:26px; height:26px; border-radius:50%; background:#fff; border:1px solid var(--line2); box-shadow:0 1px 4px rgba(0,0,0,.18); }
-  input[type=range]::-moz-range-thumb{ width:24px; height:24px; border-radius:50%; background:#fff; border:1px solid var(--line2); box-shadow:0 1px 4px rgba(0,0,0,.18); }
+  /* Sheets with their own content */
+  .import-hint{ margin-top:var(--s-3); text-align:center; font-size:var(--fs-sub); color:var(--text-3); }
+  .help-list{ display:flex; flex-direction:column; gap:var(--s-4); }
+  .help-row{ display:flex; gap:var(--s-3); align-items:flex-start; }
+  .help-row .hi{ width:40px; height:40px; flex:none; border-radius:var(--r-sm); background:var(--accent-soft); color:var(--accent-strong);
+    display:flex; align-items:center; justify-content:center; }
+  .help-row b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
+  .help-row span{ font-size:var(--fs-sub); color:var(--text-2); }
+  .help-tips{ margin:0; padding-left:var(--s-5); font-size:var(--fs-sub); color:var(--text-2); }
+  .help-tips b{ color:var(--text); font-weight:600; }
+  .share-pick{ display:flex; align-items:center; gap:var(--s-3); width:100%; min-height:var(--h-row); margin-bottom:var(--s-2);
+    padding:var(--s-2) var(--s-3) var(--s-2) var(--s-2); text-align:left; cursor:pointer; color:var(--text);
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); transition:transform var(--t-fast) var(--ease); }
+  .share-pick:active{ transform:scale(.98); }
+  .share-pick img, .share-pick .ph{ width:40px; height:40px; flex:none; border-radius:var(--r-xs); object-fit:cover; background:var(--accent-soft); }
+  .share-pick b{ display:block; font-size:var(--fs-body); font-weight:600; }
+  .share-pick span{ font-size:var(--fs-sub); color:var(--text-2); }
+  .ios-steps{ margin:0 0 var(--s-2); padding-left:var(--s-5); font-size:var(--fs-body); color:var(--text); line-height:1.7; }
+  .ios-steps svg{ vertical-align:-4px; color:var(--accent-strong); }
 
-  .modal-bg{ position:fixed; inset:0; background:rgba(11,11,16,.44); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
-    display:none; align-items:flex-end; z-index:40; }
-  .modal-bg.on{ display:flex; }
-  .sheet{ background:var(--glassL-b); backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
-    box-shadow:0 -8px 40px rgba(10,10,20,.12); width:100%; border-radius:26px 26px 0 0;
-    padding:10px 20px calc(env(safe-area-inset-bottom) + 20px); }
-  .sheet .grab{ width:38px; height:5px; border-radius:5px; background:var(--line2); margin:0 auto 16px; }
-  .sheet h3{ margin:0 0 16px; font-size:19px; font-weight:600; letter-spacing:-.01em; }
-
-  .cam{ position:fixed; inset:0; background:#000; display:none; }
+  /* ---- 6. Dark surfaces: camera, aligner, viewer, compare ---- */
+  .cam{ position:fixed; inset:0; display:none; background:#000; color:var(--on-dark); }
   .cam.active{ display:block; }
+  .glass{ background:var(--glass-dark); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  .cam-top{ position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:var(--s-2);
+    padding:calc(env(safe-area-inset-top) + var(--s-3)) var(--gutter) var(--s-3); color:var(--on-dark); }
+  .cam-top .nm{ flex:1; min-width:0; padding:0 var(--s-2); text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:var(--fs-control); font-weight:600; letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4); }
+  .cam-actions{ display:flex; gap:var(--s-2); }
+  .ciconbtn{ position:relative; width:var(--tap); height:var(--tap); flex:none; border:none; border-radius:50%; cursor:pointer; color:var(--on-dark);
+    display:flex; align-items:center; justify-content:center; transition:transform var(--t-fast) var(--ease); }
+  .ciconbtn:active{ transform:scale(.92); }
+  .ciconbtn.act{ background:rgba(var(--accent-rgb),.85); }
+  .tmr{ position:absolute; top:-3px; right:-3px; display:none; min-width:18px; height:18px; padding:0 var(--s-1); border-radius:var(--r-pill);
+    background:var(--accent); color:#fff; font-size:var(--fs-micro); font-weight:700; line-height:18px; font-style:normal; }
+  .tmr.on{ display:block; }
   #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-  #overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; z-index:1; }
-  #overlay.edges{ filter: drop-shadow(0 0 0.6px rgba(0,0,0,.85)); }
-  .cam-seg{ display:flex; gap:4px; padding:4px; border-radius:15px; margin-bottom:12px; }
-  .cam-seg button{ flex:1; border:none; background:transparent; color:#EDEDF2; padding:10px; border-radius:11px;
-    font-size:13px; font-weight:500; cursor:pointer; letter-spacing:-.01em; display:flex; align-items:center; justify-content:center; gap:6px; }
-  .cam-seg button.on{ background:rgba(var(--al-rgb),.92); color:#fff; }
-  .gridlines{ position:absolute; inset:0; pointer-events:none; z-index:2; opacity:0; transition:opacity .15s; }
+  #overlay{ position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; }
+  #overlay.edges{ filter:drop-shadow(0 0 .6px rgba(0,0,0,.85)); }
+  #overlay.diff{ mix-blend-mode:difference; filter:none; }
+  .cam.mirror #video, .cam.mirror #overlay{ transform:scaleX(-1); }
+  #flash{ position:absolute; inset:0; z-index:6; background:#fff; opacity:0; pointer-events:none; }
+  .gridlines{ position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition:opacity var(--t-base); }
   .gridlines.on{ opacity:1; }
   .gline{ position:absolute; background:rgba(255,255,255,.55); }
   .gline.v{ top:0; bottom:0; width:1px; }
   .gline.h{ left:0; right:0; height:1px; }
-  .gcross{ position:absolute; top:50%; left:50%; width:22px; height:22px; transform:translate(-50%,-50%); }
-  .gcross::before,.gcross::after{ content:""; position:absolute; background:rgba(255,255,255,.95); }
-  .gcross::before{ left:50%; top:0; bottom:0; width:1.5px; margin-left:-.75px; }
-  .gcross::after{ top:50%; left:0; right:0; height:1.5px; margin-top:-.75px; }
-
-  .cam-top{ position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between;
-    padding:calc(env(safe-area-inset-top) + 14px) 16px 14px; color:#fff; }
-  .cam-top .nm{ font-size:16px; font-weight:600; letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4);
-    flex:1; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 10px; }
-  .glass{ background:rgba(28,30,33,.42); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
-  .ciconbtn{ width:44px; height:44px; border-radius:50%; border:none; color:#fff;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; }
-  .ciconbtn:active{ transform:scale(.94); }
-  .ciconbtn.act{ background:rgba(var(--al-rgb),.85) !important; }
-  .cam-panel{ position:absolute; left:0; right:0; bottom:0; z-index:5; color:#fff;
-    padding:16px 20px calc(env(safe-area-inset-bottom) + 20px); background:linear-gradient(transparent, rgba(0,0,0,.55) 42%); }
-  .cam-slwrap{ display:flex; align-items:center; gap:13px; margin-bottom:18px; padding:11px 15px; border-radius:16px; }
-  .cam-slwrap .lbl{ font-size:13px; color:#EDEDF2; white-space:nowrap; display:flex; align-items:center; gap:6px; }
-  .cam-slwrap .val{ font-size:13px; font-weight:600; min-width:40px; text-align:right; }
+  .gcross, .al-cross{ position:absolute; top:50%; left:50%; width:24px; height:24px; transform:translate(-50%,-50%); pointer-events:none; }
+  .al-cross{ z-index:4; }
+  .gcross::before, .gcross::after, .al-cross::before, .al-cross::after{ content:""; position:absolute; background:rgba(255,255,255,.95); box-shadow:0 0 3px rgba(0,0,0,.5); }
+  .gcross::before, .al-cross::before{ left:50%; top:0; bottom:0; width:1.5px; margin-left:-.75px; }
+  .gcross::after, .al-cross::after{ top:50%; left:0; right:0; height:1.5px; margin-top:-.75px; }
+  .level{ position:absolute; top:50%; left:50%; z-index:3; width:190px; height:32px; margin:-16px 0 0 -95px; pointer-events:none; display:none; }
+  .level.on{ display:block; }
+  .level i{ position:absolute; top:50%; height:2px; margin-top:-1px; border-radius:var(--r-pill); background:rgba(255,255,255,.75); box-shadow:0 0 3px rgba(0,0,0,.4); }
+  .level .lv-l{ left:0; width:34px; } .level .lv-r{ right:0; width:34px; }
+  .level .lv-line{ left:44px; right:44px; background:var(--level); transition:transform .08s linear; }
+  .level.ok i{ background:var(--level-ok); }
+  .level .lv-deg{ position:absolute; top:24px; left:0; right:0; text-align:center; font-size:var(--fs-micro); font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  .countdown{ position:absolute; inset:0; z-index:7; display:none; align-items:center; justify-content:center; pointer-events:none;
+    font-size:120px; font-weight:700; text-shadow:0 4px 30px rgba(0,0,0,.45); }
+  .countdown.on{ display:flex; }
+  .cbadge{ position:absolute; top:calc(env(safe-area-inset-top) + 68px); left:50%; z-index:5; transform:translateX(-50%);
+    padding:var(--s-2) var(--s-4); border-radius:var(--r-pill); background:rgba(var(--accent-rgb),.92); box-shadow:var(--sh-2);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); font-size:var(--fs-label); font-weight:500; white-space:nowrap; }
+  .libchip{ position:absolute; top:calc(env(safe-area-inset-top) + 64px); left:50%; z-index:5; transform:translateX(-50%);
+    display:flex; align-items:center; gap:var(--s-2); padding:var(--s-1) var(--s-1) var(--s-1) var(--s-3); border-radius:var(--r-pill);
+    font-size:var(--fs-label); font-weight:500; white-space:nowrap; }
+  .libchip button{ min-height:32px; padding:0 var(--s-3); border:none; border-radius:var(--r-pill); cursor:pointer;
+    background:rgba(255,255,255,.16); color:var(--on-dark); font-size:var(--fs-label); font-weight:600; }
+  .camhint{ position:absolute; left:var(--s-5); right:var(--s-5); bottom:180px; z-index:4; padding:var(--s-3) var(--s-4); border-radius:var(--r-md);
+    text-align:center; font-size:var(--fs-sub); }
+  .cam-panel{ position:absolute; left:0; right:0; bottom:0; z-index:5; padding:var(--s-4) var(--s-5) calc(env(safe-area-inset-bottom) + var(--s-5));
+    background:linear-gradient(transparent, rgba(0,0,0,.55) 42%); }
+  .cam-seg{ display:flex; gap:var(--s-1); padding:var(--s-1); min-height:var(--h-seg); margin-bottom:var(--s-3); border-radius:var(--r-md); }
+  .cam-seg button{ flex:1; border:none; background:transparent; border-radius:var(--r-sm); cursor:pointer; padding:0 var(--s-1);
+    color:var(--on-dark-2); font-size:var(--fs-sub); font-weight:500; display:flex; align-items:center; justify-content:center; gap:6px;
+    transition:background var(--t-base); }
+  .cam-seg button.on{ background:rgba(var(--accent-rgb),.92); color:#fff; }
+  .cam-seg .seg-help{ flex:none; width:40px; font-size:var(--fs-body); font-weight:700; }
+  .cam-slwrap{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-seg); margin-bottom:var(--s-4); padding:0 var(--s-4); border-radius:var(--r-md); }
+  .cam-slwrap .lbl{ display:flex; align-items:center; gap:6px; white-space:nowrap; color:var(--on-dark-2); font-size:var(--fs-sub); }
+  .cam-slwrap .val{ min-width:40px; text-align:right; font-size:var(--fs-sub); font-weight:600; }
   .cam-slwrap input[type=range]{ background:rgba(255,255,255,.28); }
-  .cam-slwrap input[type=range]::-webkit-slider-thumb{ background:#fff; border:none; width:24px; height:24px; }
+  .cam-slwrap input[type=range]::-webkit-slider-thumb{ width:24px; height:24px; border:none; background:#fff; }
   .cam-controls{ display:flex; align-items:center; justify-content:space-between; }
-  .cam-side{ width:70px; display:flex; justify-content:center; }
-  .cpill{ border:none; color:#fff; border-radius:16px; padding:10px 8px; font-size:11.5px; font-weight:500;
-    cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:62px; }
-  .cpill:active{ transform:scale(.96); }
-  .cpill.act{ background:rgba(var(--al-rgb),.9); }
-  .cthumb{ width:54px; height:54px; border-radius:15px; border:2.5px solid rgba(255,255,255,.7); object-fit:cover; background:#222; }
-  .shutter{ width:80px; height:80px; border-radius:50%; background:#fff; cursor:pointer; padding:0;
-    box-shadow:0 0 0 4px rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; }
-  .shutter:active{ transform:scale(.94); }
-  .shutter i{ width:64px; height:64px; border-radius:50%; background:#fff; box-shadow:inset 0 0 0 2px rgba(0,0,0,.08); display:block; }
-  #flash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
-  .cbadge{ position:absolute; top:calc(env(safe-area-inset-top) + 66px); left:50%; transform:translateX(-50%); z-index:5;
-    font-size:12.5px; font-weight:500; padding:8px 15px; border-radius:20px; color:#fff; background:rgba(var(--al-rgb),.92);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); display:none; white-space:nowrap; box-shadow:0 4px 16px rgba(0,0,0,.25); }
-  .camhint{ position:absolute; left:22px; right:22px; bottom:165px; text-align:center; font-size:13.5px; color:#fff; line-height:1.5;
-    padding:12px 16px; border-radius:16px; z-index:4; display:none; }
-
-  .camerr{ position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; padding:36px; z-index:9; background:var(--ink); color:#fff; }
-  .camerr.on{ display:flex; }
-  .camerr strong{ font-size:19px; font-weight:600; }
-  .camerr p{ font-size:14px; line-height:1.6; color:#A6A6B0; max-width:320px; margin:12px 0 22px; }
-
-  .expcard{ background:var(--card); border:1px solid var(--line); border-radius:var(--r-card); box-shadow:var(--sh);
-    padding:16px; margin-bottom:20px; }
-  .expstage{ display:flex; justify-content:center; }
-  .expstage canvas{ display:block; max-width:100%; max-height:36vh; width:auto; height:auto; border-radius:14px; background:var(--al-bg); }
-  .optcard{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:6px 16px; box-shadow:var(--sh); }
-  .optcard .slrow{ padding:12px 0; border-bottom:1px solid var(--line); }
-  .tgl{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; font-size:15px; cursor:pointer; }
-  .tgl + .tgl{ border-top:1px solid var(--line); }
-  .tgl input{ position:absolute; opacity:0; pointer-events:none; }
-  .tgl i{ position:relative; flex:none; width:46px; height:28px; border-radius:14px; background:var(--line2); transition:background .2s; }
-  .tgl i::after{ content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff;
-    box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.22,.61,.36,1); }
-  .tgl input:checked + i{ background:var(--al); }
-  .tgl input:checked + i::after{ transform:translateX(18px); }
-  .tgl input:focus-visible + i{ outline:2px solid var(--al); outline-offset:2px; }
-  .seg button:disabled{ opacity:.4; cursor:default; }
-  .exp-out{ width:100%; max-width:300px; max-height:56vh; object-fit:contain; display:block; margin:0 auto; border-radius:16px; box-shadow:var(--sh); background:#000; }
-  .exp-info{ text-align:center; font-size:12.5px; color:var(--txt3); margin:10px 0 14px; }
-  .spinner{ width:26px; height:26px; border:3px solid var(--line2); border-top-color:var(--al); border-radius:50%;
-    animation:spin .7s linear infinite; margin:0 auto; }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-  .icon{ width:22px; height:22px; }
-
-  :root{ --sh:0 1px 2px rgba(10,10,20,.04), 0 8px 24px rgba(10,10,20,.055); --r-card:22px; }
-  @keyframes screenIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
-  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
-  @keyframes sheetUp{ from{ transform:translateY(100%); } to{ transform:none; } }
-  @keyframes badgePop{ from{ opacity:0; transform:translateX(-50%) translateY(-6px) scale(.92); } to{ opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
-  @keyframes listIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
-  .screen.active{ animation:screenIn .28s cubic-bezier(.22,.61,.36,1); }
-  .cam.active{ animation:fadeIn .24s ease; }
-  .modal-bg.on{ animation:fadeIn .18s ease; }
-  .modal-bg.on .sheet{ animation:sheetUp .32s cubic-bezier(.22,.61,.36,1); }
-  .pswipe{ animation:listIn .3s ease backwards; }
-  .ptile{ animation:listIn .3s ease backwards; }
-  .brand{ font-size:24px; }
-  .btn{ padding:16px; }
-  .btn.primary{ box-shadow:0 4px 16px rgba(var(--al-rgb),.30); }
-  .btn.primary:active{ box-shadow:0 2px 8px rgba(var(--al-rgb),.26); }
-  .pthumb{ border-radius:16px; }
-  .cthumb{ cursor:pointer; transition:transform .1s; }
+  .cam-side{ width:72px; display:flex; justify-content:center; }
+  .cpill{ min-width:64px; min-height:var(--tap); padding:var(--s-2); border:none; border-radius:var(--r-md); cursor:pointer; color:var(--on-dark);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s-1); font-size:var(--fs-label); font-weight:500;
+    transition:transform var(--t-fast) var(--ease); }
+  .cpill:active{ transform:scale(.94); }
+  .cpill.act{ background:rgba(var(--accent-rgb),.9); }
+  .cthumb{ width:54px; height:54px; object-fit:cover; cursor:pointer; border-radius:var(--r-sm); border:2.5px solid rgba(255,255,255,.7); background:#222;
+    transition:transform var(--t-fast) var(--ease); }
   .cthumb:active{ transform:scale(.92); }
+  .shutter{ width:80px; height:80px; padding:0; border:none; border-radius:50%; cursor:pointer; background:#fff;
+    box-shadow:0 0 0 4px rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; transition:transform var(--t-fast) var(--ease); }
+  .shutter:active{ transform:scale(.92); }
+  .shutter:disabled{ opacity:.6; }
+  .shutter i{ display:block; width:64px; height:64px; border-radius:50%; background:#fff; box-shadow:inset 0 0 0 2px rgba(0,0,0,.08); }
+  .camerr{ position:absolute; inset:0; z-index:9; display:none; flex-direction:column; align-items:center; justify-content:center;
+    padding:var(--s-8); text-align:center; background:var(--ink); }
+  .camerr.on{ display:flex; }
+  .camerr strong{ font-size:var(--fs-title); font-weight:600; }
+  .camerr p{ max-width:320px; margin:var(--s-3) 0 var(--s-6); font-size:var(--fs-sub); color:var(--on-dark-3); }
 
-  .photoview{ position:fixed; inset:0; z-index:60; background:#060809; display:none; align-items:center; justify-content:center; }
-  .photoview.on{ display:flex; animation:fadeIn .2s ease; }
-  .photoview img{ max-width:100%; max-height:100%; object-fit:contain; }
-  .pv-close{ position:absolute; top:calc(env(safe-area-inset-top) + 16px); right:16px; width:44px; height:44px; border-radius:50%;
-    border:none; background:rgba(40,42,45,.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:#fff;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2; }
-  .pv-close:active{ transform:scale(.94); }
-  .pv-cap{ position:absolute; bottom:calc(env(safe-area-inset-bottom) + 92px); left:0; right:0; text-align:center; color:#fff; font-size:13px; opacity:.75; padding:0 12px; }
-  .pv-bar{ position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:6px;
-    padding:10px 12px calc(env(safe-area-inset-bottom) + 14px); background:linear-gradient(transparent, rgba(0,0,0,.6)); z-index:2; }
-  .pv-act{ flex:1; max-width:88px; border:none; background:none; color:#fff; display:flex; flex-direction:column; align-items:center; gap:5px;
-    font-size:11.5px; font-weight:500; padding:8px 4px; border-radius:14px; cursor:pointer; }
+  /* Aligner */
+  .al-viewport{ position:absolute; inset:0; overflow:hidden; touch-action:none; background:#0b0c0e; }
+  .al-img{ position:absolute; top:50%; left:50%; z-index:1; max-width:none; transform-origin:center center; cursor:grab; }
+  .al-ghost, .al-frame{ position:absolute; top:50%; left:50%; width:min(80vw,46vh); height:min(80vw,46vh); transform:translate(-50%,-50%);
+    pointer-events:none; border-radius:0; }
+  .al-ghost{ z-index:2; object-fit:cover; opacity:.34; display:none; }
+  .al-ghost.on{ display:block; }
+  .al-frame{ z-index:3; border:1.5px solid rgba(255,255,255,.85); box-shadow:0 0 0 2000px rgba(0,0,0,.55); }
+  .al-shape span{ font-size:var(--fs-label); font-weight:700; }
+  .al-tools{ display:flex; justify-content:center; gap:var(--s-3); margin-bottom:var(--s-3); }
+  .al-tool{ min-height:40px; padding:0 var(--s-4); border:none; border-radius:var(--r-pill); cursor:pointer; color:var(--on-dark);
+    display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-sub); font-weight:600; transition:transform var(--t-fast) var(--ease); }
+  .al-tool:active{ transform:scale(.94); }
+  .al-rot{ position:absolute; top:calc(env(safe-area-inset-top) + 112px); left:50%; z-index:5; transform:translateX(-50%);
+    padding:var(--s-1) var(--s-3); border-radius:var(--r-pill); background:rgba(0,0,0,.45); font-size:var(--fs-label); font-weight:600; }
+
+  /* Photo viewer */
+  .photoview{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:#060809; color:var(--on-dark); }
+  .photoview.on{ display:flex; }
+  .photoview > img{ max-width:100%; max-height:calc(100% - 150px); object-fit:contain; }
+  .pv-close, .pv-nav{ position:absolute; z-index:2; width:var(--tap); height:var(--tap); border:none; border-radius:50%; cursor:pointer;
+    background:rgba(40,42,45,.55); color:var(--on-dark); display:flex; align-items:center; justify-content:center;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); transition:transform var(--t-fast) var(--ease); }
+  .pv-close{ top:calc(env(safe-area-inset-top) + var(--s-3)); right:var(--gutter); }
+  .pv-close:active{ transform:scale(.92); }
+  .pv-nav{ top:50%; transform:translateY(-50%); }
+  .pv-nav:active{ transform:translateY(-50%) scale(.92); }
+  .pv-nav.prev{ left:var(--s-3); } .pv-nav.next{ right:var(--s-3); }
+  .pv-cap{ position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 92px); padding:0 var(--s-3);
+    text-align:center; font-size:var(--fs-sub); opacity:.75; }
+  .pv-src{ display:inline-flex; align-items:center; gap:var(--s-1); margin-left:var(--s-2); padding:2px var(--s-2); border-radius:var(--r-pill);
+    background:rgba(255,255,255,.14); font-size:var(--fs-micro); }
+  .pv-bar{ position:absolute; left:0; right:0; bottom:0; z-index:2; display:flex; justify-content:center; gap:var(--s-2);
+    padding:var(--s-3) var(--s-3) calc(env(safe-area-inset-bottom) + var(--s-3)); background:linear-gradient(transparent, rgba(0,0,0,.6)); }
+  .pv-act{ flex:1; max-width:88px; min-height:56px; padding:var(--s-2) var(--s-1); border:none; border-radius:var(--r-md); cursor:pointer;
+    background:none; color:var(--on-dark); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s-1);
+    font-size:var(--fs-label); font-weight:500; }
   .pv-act:active{ background:rgba(255,255,255,.12); }
   .pv-act.danger{ color:#FF9B92; }
-  .photoview img{ max-height:calc(100% - 150px); }
-  .pv-src{ display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:3px 9px; border-radius:12px; background:rgba(255,255,255,.14); font-size:11.5px; }
 
-  .ld-hero{ text-align:center; padding:20px 4px 6px; }
-  .landing-logo{ width:74px; height:74px; margin:0 auto 18px; animation:landPop .5s cubic-bezier(.22,.61,.36,1); }
-  .landing-logo svg{ width:100%; height:100%; }
-  @keyframes landPop{ from{ opacity:0; transform:scale(.82); } to{ opacity:1; transform:none; } }
-  .landing-word{ font-size:30px; font-weight:600; letter-spacing:-.035em; margin:0 0 10px; }
-  .landing-tag{ font-size:15.5px; color:var(--txt2); line-height:1.5; margin:0 auto; max-width:300px; }
-
-  .ld-demo{ background:var(--neu); border-radius:20px; padding:20px 18px; margin:24px 0 26px; text-align:center; }
-  .ld-demo-lbl{ font-size:12px; font-weight:600; color:var(--al-d); margin:0 0 14px; letter-spacing:.01em; }
-  .ld-demo-strip{ display:flex; align-items:center; justify-content:center; margin-bottom:13px; }
-  .ld-demo-strip .ex-fr{ width:62px; height:62px; border-radius:14px; box-shadow:0 2px 8px rgba(10,10,20,.08); }
-  .ld-demo-strip .ex-ar{ font-size:16px; margin:0 7px; color:var(--txt3); }
-  .ld-demo-cap{ font-size:13px; color:var(--txt2); line-height:1.5; margin:0; }
-
-  .ld-steps{ margin-bottom:26px; }
-  .ld-step{ display:flex; gap:13px; align-items:flex-start; margin-bottom:16px; }
-  .ld-step:last-child{ margin-bottom:0; }
-  .ld-step .num{ width:27px; height:27px; border-radius:50%; background:var(--al); color:#fff; font-size:13px; font-weight:600;
-    display:flex; align-items:center; justify-content:center; flex:none; }
-  .ld-step b{ font-size:14.5px; font-weight:600; display:block; }
-  .ld-step span{ font-size:13px; color:var(--txt2); line-height:1.4; }
-
-  .ld-trust{ display:flex; gap:10px; margin-bottom:6px; }
-  .ld-trust .tchip{ flex:1; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:15px;
-    padding:14px 12px; text-align:center; box-shadow:var(--sh); }
-  .ld-trust .tchip svg{ color:var(--al-d); margin-bottom:7px; }
-  .ld-trust .tchip b{ font-size:12.5px; font-weight:600; display:block; margin-bottom:2px; }
-  .ld-trust .tchip span{ font-size:11px; color:var(--txt2); }
-  .landing-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin:12px 0 0; }
-
-  .empty p{ max-width:280px; margin-left:auto; margin-right:auto; }
-  .hero{ background:var(--neu); border-radius:18px; padding:14px; margin-bottom:20px; animation:listIn .3s ease; }
-  .hero-row{ display:flex; align-items:center; gap:10px; }
-  .hero-fig{ margin:0; flex:1; min-width:0; }
-  .hero-fig img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:12px; display:block; }
-  .hero-fig figcaption{ font-size:11px; color:var(--txt2); text-align:center; margin-top:7px; font-weight:500;
-    display:flex; align-items:center; justify-content:center; gap:4px; }
-  .hero-ar{ color:var(--al); flex:none; display:flex; }
-  .hero-stats{ display:flex; margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
-  .hero-stats .stat{ flex:1; text-align:center; }
-  .hero-stats .stat + .stat{ border-left:1px solid var(--line); }
-  .hero-stats .stat b{ display:block; font-size:17px; font-weight:600; letter-spacing:-.02em; }
-  .hero-stats .stat span{ font-size:11px; color:var(--txt2); }
-
-  .set-card{ background:var(--neu); border-radius:16px; padding:16px; margin-bottom:22px; display:flex; flex-direction:column; gap:16px; }
-  .set-step{ display:flex; gap:13px; align-items:flex-start; }
-  .set-step .num{ width:27px; height:27px; border-radius:50%; background:var(--al); color:#fff; font-size:13px; font-weight:600;
-    display:flex; align-items:center; justify-content:center; flex:none; }
-  .set-step b{ font-size:14.5px; font-weight:600; display:block; }
-  .set-step span{ font-size:13px; color:var(--txt2); line-height:1.4; }
-  .stat-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
-  .stat-card{ background:var(--neu); border-radius:14px; padding:15px 8px; text-align:center; }
-  .stat-card b{ display:block; font-size:21px; font-weight:600; letter-spacing:-.02em; }
-  .stat-card span{ font-size:11px; color:var(--txt2); }
-  .set-row{ display:flex; align-items:center; gap:12px; padding:15px 14px; border:1px solid var(--line); border-radius:14px;
-    margin-bottom:10px; cursor:pointer; background:var(--card); }
-  .set-row:active{ background:var(--neu); }
-  .set-row .ri{ color:var(--al-d); display:flex; }
-  .set-row .rt{ flex:1; font-size:15px; }
-  .cam-seg .seg-help{ flex:none; width:38px; font-size:15px; font-weight:700; color:#EDEDF2; }
-  .help-list{ display:flex; flex-direction:column; gap:14px; margin-bottom:18px; }
-  .help-row{ display:flex; gap:13px; align-items:flex-start; }
-  .help-row .hi{ width:38px; height:38px; border-radius:12px; background:var(--al-bg); color:var(--al-d); display:flex; align-items:center; justify-content:center; flex:none; }
-  .help-row b{ font-size:15px; font-weight:600; display:block; margin-bottom:2px; }
-  .help-row span{ font-size:13.5px; color:var(--txt2); line-height:1.45; }
-  .help-tips{ margin:0; padding-left:18px; font-size:13.5px; color:var(--txt2); line-height:1.55; }
-  .help-tips b{ color:var(--txt); font-weight:600; }
-  .pcard:focus-visible, .ptile:focus-visible, .btn:focus-visible, .set-row:focus-visible{ outline:2px solid var(--al); outline-offset:2px; }
-  .nextchip{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--txt2); margin:0 0 14px; }
-  .nextchip svg{ color:var(--al-d); flex:none; }
-  .empty .acts{ display:flex; flex-direction:column; gap:10px; margin:22px auto 0; max-width:260px; }
-  .share-pick{ display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid var(--line);
-    border-radius:14px; padding:8px 12px 8px 8px; margin-bottom:8px; background:var(--card); color:var(--txt); cursor:pointer; font-size:15px; }
-  .share-pick:active{ transform:scale(.99); }
-  .share-pick img, .share-pick .ph{ width:42px; height:42px; border-radius:11px; object-fit:cover; flex:none; background:var(--al-bg); }
-  .share-pick b{ font-weight:600; display:block; }
-  .share-pick span{ font-size:12.5px; color:var(--txt2); }
-  .set-row .rs{ display:block; font-size:12.5px; color:var(--txt3); margin-top:2px; }
-  .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); transform:translateX(-50%) translateY(12px);
-    background:var(--pill-bg); color:var(--pill-fg); border-radius:22px; padding:11px 18px; font-size:13.5px; font-weight:500;
-    z-index:90; opacity:0; pointer-events:none; transition:opacity .2s, transform .25s; white-space:nowrap; max-width:calc(100% - 32px);
-    overflow:hidden; text-overflow:ellipsis; box-shadow:0 8px 24px rgba(0,0,0,.22); }
-  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
-  .set-row.danger .ri, .set-row.danger .rt{ color:var(--danger-t); }
-  .set-foot{ text-align:center; font-size:12.5px; color:var(--txt3); margin-top:16px; line-height:1.7; }
-
-  #overlay.diff{ mix-blend-mode:difference; filter:none; }
-  .cam-seg button{ font-size:12.5px; padding-left:4px; padding-right:4px; }
-
-
-  .sheet{ max-height:90vh; overflow-y:auto; }
-  .sheet-sub{ font-size:14px; color:var(--txt2); margin:0 0 16px; line-height:1.5; }
-  .examples{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
-  .ex{ display:flex; align-items:center; gap:13px; width:100%; text-align:left; border:1px solid var(--line);
-    border-radius:15px; padding:10px 12px; background:var(--card); cursor:pointer; transition:transform .1s, border-color .15s, background .15s; }
-  .ex:active{ transform:scale(.985); }
-  .ex.sel{ border-color:var(--al); background:var(--al-bg); }
-  .ex-strip{ display:flex; align-items:center; flex:none; }
-  .ex-fr{ width:34px; height:34px; border-radius:9px; overflow:hidden; display:inline-flex; box-shadow:0 1px 2px rgba(0,0,0,.07); }
-  .ex-fr svg{ width:100%; height:100%; display:block; }
-  .ex-ar{ color:var(--txt3); margin:0 3px; font-size:15px; line-height:1; }
-  .ex-txt b{ font-size:14.5px; font-weight:600; display:block; }
-  .ex-txt span{ font-size:12.5px; color:var(--txt2); }
-  .tip{ display:flex; gap:9px; align-items:flex-start; font-size:12.5px; color:var(--al-d); background:var(--al-bg);
-    border-radius:13px; padding:12px; line-height:1.5; }
-  .tip svg{ flex:none; margin-top:1px; }
-  .empty-strip{ display:flex; align-items:center; justify-content:center; margin-bottom:20px; }
-  .empty-strip .ex-fr{ width:54px; height:54px; border-radius:13px; }
-  .empty-strip .ex-ar{ font-size:19px; margin:0 6px; }
-  .tbtn:active{ transform:scale(.9); }
-
-  .duechip{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--warn-fg);
-    background:var(--warn-bg); border-radius:20px; padding:2.5px 9px; margin-left:7px; vertical-align:1px; }
-  .due-banner{ display:flex; align-items:center; gap:11px; background:var(--warn-bg); color:var(--warn-fg2); border-radius:15px;
-    padding:13px 14px; margin-bottom:16px; font-size:13.5px; line-height:1.4; cursor:pointer; animation:listIn .3s ease; }
-  .due-banner b{ font-weight:600; }
-  .due-banner .go{ margin-left:auto; color:var(--warn-fg); display:flex; flex:none; }
-  .pv-nav{ position:absolute; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%;
-    border:none; background:rgba(40,42,45,.5); color:#fff; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; z-index:2; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
-  .pv-nav:active{ transform:translateY(-50%) scale(.92); }
-  .pv-nav.prev{ left:14px; } .pv-nav.next{ right:14px; }
-  .pv-del{ position:absolute; top:calc(env(safe-area-inset-top) + 16px); left:16px; width:44px; height:44px;
-    border-radius:50%; border:none; background:rgba(40,42,45,.55); color:#FF9B92; display:flex; align-items:center;
-    justify-content:center; cursor:pointer; z-index:2; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
-  .pv-del:active{ transform:scale(.92); }
-  .btn.dangerf{ background:#D93B30; color:#fff; }
-  .btn:disabled{ opacity:.45; pointer-events:none; }
-  #cfModal{ z-index:70; }
-  .update-pill{ position:fixed; left:50%; transform:translateX(-50%) translateY(90px);
-    bottom:calc(env(safe-area-inset-bottom) + 18px); background:var(--pill-bg); color:var(--pill-fg); border:none; border-radius:24px;
-    padding:13px 21px; font-size:13.5px; font-weight:600; z-index:80; cursor:pointer;
-    transition:transform .4s cubic-bezier(.22,.61,.36,1); box-shadow:0 8px 24px rgba(0,0,0,.28); }
-  .update-pill.on{ transform:translateX(-50%) translateY(0); }
-
-  .libchip{ position:absolute; top:calc(env(safe-area-inset-top) + 60px); left:50%; transform:translateX(-50%);
-    z-index:5; display:flex; align-items:center; gap:7px; font-size:12px; font-weight:500; color:#fff;
-    padding:6px 8px 6px 11px; border-radius:20px; white-space:nowrap; }
-  .libchip button{ background:rgba(255,255,255,.16); border:none; color:#fff; font-size:11.5px; font-weight:600;
-    padding:5px 10px; border-radius:14px; cursor:pointer; }
-
-  .import-hint{ font-size:12.5px; color:var(--txt3); line-height:1.5; margin:10px 2px 0; text-align:center; }
-
-  .hero-row{ cursor:pointer; }
-  .hero-cmp{ width:100%; margin-top:12px; border:none; background:var(--card); color:var(--al-d); border-radius:12px;
-    padding:11px; font-size:14px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;
-    cursor:pointer; box-shadow:var(--sh); }
-  .hero-cmp:active{ transform:scale(.985); }
-
-  .cmpview{ position:fixed; inset:0; z-index:58; background:#08080b; display:none; flex-direction:column; color:#fff; }
-  .cmpview.on{ display:flex; animation:fadeIn .2s ease; }
+  /* Compare */
+  .cmpview{ position:fixed; inset:0; z-index:58; display:none; flex-direction:column; background:#08080b; color:var(--on-dark); }
+  .cmpview.on{ display:flex; }
   .cmpview .cam-top{ position:relative; }
-  .cmp-area{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0 12px; }
-  .cmp-stage{ position:relative; overflow:hidden; border-radius:14px; touch-action:none; cursor:ew-resize; background:#16161c; user-select:none; }
-  .cmp-stage img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; -webkit-user-drag:none; }
+  .cmp-area{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0 var(--s-3); }
+  .cmp-stage{ position:relative; overflow:hidden; border-radius:var(--r-md); touch-action:none; cursor:ew-resize; background:#16161c; }
+  .cmp-stage img{ position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; pointer-events:none; }
   .cmp-line{ position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.5); pointer-events:none; }
-  .cmp-knob{ position:absolute; top:50%; left:50%; width:42px; height:42px; transform:translate(-50%,-50%); border-radius:50%;
-    background:#fff; color:var(--ink); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(0,0,0,.35); }
-  .cmp-tag{ position:absolute; top:10px; font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:20px;
-    background:rgba(10,10,14,.55); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); pointer-events:none; white-space:nowrap; }
-  .cmp-tag.l{ left:10px; } .cmp-tag.r{ right:10px; }
-  .cmp-bottom{ padding:14px 16px calc(env(safe-area-inset-bottom) + 16px); }
-  .cmp-bottom .cam-seg{ margin-bottom:12px; }
-  .cmp-strip{ display:flex; gap:8px; overflow-x:auto; padding:3px 2px 4px; scrollbar-width:none; }
+  .cmp-knob{ position:absolute; top:50%; left:50%; width:var(--tap); height:var(--tap); transform:translate(-50%,-50%); border-radius:50%;
+    background:#fff; color:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; }
+  .cmp-tag{ position:absolute; top:var(--s-3); padding:var(--s-1) var(--s-3); border-radius:var(--r-pill); pointer-events:none; white-space:nowrap;
+    background:rgba(10,10,14,.55); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-size:var(--fs-label); font-weight:600; }
+  .cmp-tag.l{ left:var(--s-3); } .cmp-tag.r{ right:var(--s-3); }
+  .cmp-bottom{ padding:var(--s-4) var(--gutter) calc(env(safe-area-inset-bottom) + var(--s-4)); }
+  .cmp-strip{ display:flex; gap:var(--s-2); overflow-x:auto; padding:3px 2px var(--s-1); scrollbar-width:none; }
   .cmp-strip::-webkit-scrollbar{ display:none; }
-  .cmp-th{ position:relative; flex:none; width:54px; height:54px; border-radius:12px; overflow:hidden; cursor:pointer;
-    border:none; padding:0; background:#222; outline:2px solid transparent; outline-offset:1px; }
-  .cmp-th img{ width:100%; height:100%; object-fit:cover; display:block; opacity:.75; }
+  .cmp-th{ position:relative; flex:none; width:56px; height:56px; padding:0; border:none; border-radius:var(--r-sm); overflow:hidden; cursor:pointer;
+    background:#222; outline:2px solid transparent; outline-offset:1px; }
+  .cmp-th img{ display:block; width:100%; height:100%; object-fit:cover; opacity:.75; }
   .cmp-th.a, .cmp-th.b{ outline-color:#fff; }
   .cmp-th.a img, .cmp-th.b img{ opacity:1; }
-  .cmp-th i{ position:absolute; left:3px; bottom:3px; font-style:normal; font-size:9.5px; font-weight:700; line-height:1;
-    padding:3px 5px; border-radius:6px; background:var(--al); color:#fff; display:none; }
+  .cmp-th i{ position:absolute; left:3px; bottom:3px; display:none; padding:3px 5px; border-radius:var(--r-xs); background:var(--accent); color:#fff;
+    font-style:normal; font-size:var(--fs-micro); font-weight:700; line-height:1; }
   .cmp-th.a i.ia, .cmp-th.b i.ib{ display:block; }
   .cmp-th.a.b i.ib{ left:auto; right:3px; }
 
-  .cam.mirror #video, .cam.mirror #overlay{ transform:scaleX(-1); }
-  .ciconbtn{ position:relative; }
-  .tmr{ position:absolute; right:-3px; top:-3px; min-width:18px; height:18px; border-radius:9px; padding:0 4px;
-    background:var(--al); color:#fff; font-size:10.5px; font-weight:700; line-height:18px; display:none; }
-  .tmr.on{ display:block; }
-  .countdown{ position:absolute; inset:0; z-index:7; display:none; align-items:center; justify-content:center;
-    font-size:120px; font-weight:700; color:#fff; text-shadow:0 4px 30px rgba(0,0,0,.45); pointer-events:none; }
-  .countdown.on{ display:flex; }
-  .countdown span{ animation:cdPop 1s ease both; }
+  /* ---- 7. Motion ---- */
+  @keyframes screenIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes sheetUp{ from{ transform:translateY(100%); } to{ transform:none; } }
+  @keyframes listIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+  @keyframes badgePop{ from{ opacity:0; transform:translateX(-50%) translateY(-6px) scale(.92); } to{ opacity:1; transform:translateX(-50%) scale(1); } }
+  @keyframes logoPop{ from{ opacity:0; transform:scale(.82); } to{ opacity:1; transform:none; } }
   @keyframes cdPop{ 0%{ opacity:0; transform:scale(1.5); } 20%{ opacity:1; transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(.9); } }
-  .level{ position:absolute; top:50%; left:50%; width:190px; height:30px; margin:-15px 0 0 -95px; z-index:3; pointer-events:none; display:none; }
-  .level.on{ display:block; }
-  .level i{ position:absolute; top:50%; height:2px; margin-top:-1px; background:rgba(255,255,255,.75); border-radius:2px; box-shadow:0 0 3px rgba(0,0,0,.4); }
-  .level .lv-l{ left:0; width:34px; } .level .lv-r{ right:0; width:34px; }
-  .level .lv-line{ left:44px; right:44px; background:#FFD43B; transition:transform .08s linear; }
-  .level.ok i{ background:#49E08A; }
-  .level .lv-deg{ position:absolute; top:22px; left:0; right:0; text-align:center; font-size:11px; font-weight:600; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  .screen.active{ animation:screenIn var(--t-slow) var(--ease); }
+  .cam.active, .photoview.on, .cmpview.on, .modal-bg.on{ animation:fadeIn var(--t-base) ease; }
+  .modal-bg.on .sheet{ animation:sheetUp var(--t-slow) var(--ease); }
+  .pswipe, .ptile, .hero, .due-banner{ animation:listIn var(--t-slow) ease backwards; }
+  .landing-logo{ animation:logoPop .5s var(--ease); }
+  .countdown span{ animation:cdPop 1s ease both; }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:1ms !important; animation-delay:0s !important; transition-duration:1ms !important; }
+  }
 
-  .seg{ display:flex; gap:4px; padding:4px; border-radius:14px; background:var(--neu); margin-bottom:22px; }
-  .seg button{ flex:1; border:none; background:transparent; color:var(--txt2); padding:10px 6px; border-radius:11px;
-    font-size:14px; font-weight:500; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
-  .seg button.on{ background:var(--card); color:var(--txt); font-weight:600; box-shadow:var(--sh); }
-
-  .al-viewport{ position:absolute; inset:0; overflow:hidden; touch-action:none; background:#0b0c0e; }
-  .al-img{ position:absolute; top:50%; left:50%; max-width:none; z-index:1; transform-origin:center center;
-    cursor:grab; user-select:none; -webkit-user-drag:none; }
-  .al-ghost{ position:absolute; top:50%; left:50%; width:min(80vw,46vh); height:min(80vw,46vh);
-    transform:translate(-50%,-50%); object-fit:cover; opacity:.34; z-index:2; pointer-events:none;
-    border-radius:4px; display:none; }
-  .al-ghost.on{ display:block; }
-  .al-frame{ position:absolute; top:50%; left:50%; width:min(80vw,46vh); height:min(80vw,46vh);
-    transform:translate(-50%,-50%); z-index:3; pointer-events:none; border-radius:4px;
-    border:1.5px solid rgba(255,255,255,.85); box-shadow:0 0 0 2000px rgba(0,0,0,.55); }
-  .al-shape span{ font-size:12px; font-weight:700; letter-spacing:-.01em; }
-  .al-tools{ display:flex; justify-content:center; gap:10px; margin-bottom:12px; }
-  .al-tool{ border:none; color:#fff; border-radius:20px; padding:9px 15px; font-size:13px; font-weight:600; cursor:pointer;
-    display:flex; align-items:center; gap:7px; }
-  .al-tool:active{ transform:scale(.96); }
-  .al-rot{ position:absolute; top:calc(env(safe-area-inset-top) + 112px); left:50%; transform:translateX(-50%); z-index:5;
-    font-size:12px; font-weight:600; color:#fff; padding:5px 11px; border-radius:14px; background:rgba(0,0,0,.45); display:none; }
-  .al-cross{ position:absolute; top:50%; left:50%; width:24px; height:24px; transform:translate(-50%,-50%);
-    z-index:4; pointer-events:none; }
-  .al-cross::before,.al-cross::after{ content:""; position:absolute; background:rgba(255,255,255,.92);
-    box-shadow:0 0 3px rgba(0,0,0,.5); }
-  .al-cross::before{ left:50%; top:0; bottom:0; width:1.5px; margin-left:-.75px; }
-  .al-cross::after{ top:50%; left:0; right:0; height:1.5px; margin-top:-.75px; }
-
-  /* Dark theme: follows the system unless the user picked one in Settings. */
+  /* ---- 8. Dark theme: follows the system unless picked in Settings ---- */
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --al:#6C70F6; --al-d:#AEB0FF; --al-bg:#25264A; --al-rgb:108,112,246;
-      --bg:#0D0D12; --card:#17171E; --line:#25252E; --line2:#33333E;
-      --txt:#F1F1F5; --txt2:#A3A3AF; --txt3:#6E6E7A; --neu:#1C1C24; --neu-d:#B4B4C0;
-      --sh:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-btn:0 4px 18px rgba(108,112,246,.28);
-      --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.9);
-      --glow:#1A1B36; --press:rgba(255,255,255,.08); --danger-t:#FF7A70;
-      --warn-bg:#3A2D10; --warn-fg:#F4C66A; --warn-fg2:#F2D9A4;
+      --accent:#6C70F6; --accent-strong:#AEB0FF; --accent-soft:#25264A; --accent-rgb:108,112,246;
+      --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
+      --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
+      --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
+      --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08); --glow:#1A1B36;
       --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
+      --sh-1:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-2:0 8px 32px rgba(0,0,0,.5);
       color-scheme:dark;
     }
   }
   :root[data-theme="dark"]{
-    --al:#6C70F6; --al-d:#AEB0FF; --al-bg:#25264A; --al-rgb:108,112,246;
-    --bg:#0D0D12; --card:#17171E; --line:#25252E; --line2:#33333E;
-    --txt:#F1F1F5; --txt2:#A3A3AF; --txt3:#6E6E7A; --neu:#1C1C24; --neu-d:#B4B4C0;
-    --sh:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-btn:0 4px 18px rgba(108,112,246,.28);
-    --glassL:rgba(30,30,38,.6); --glassL-b:rgba(26,26,34,.9);
-    --glow:#1A1B36; --press:rgba(255,255,255,.08); --danger-t:#FF7A70;
-    --warn-bg:#3A2D10; --warn-fg:#F4C66A; --warn-fg2:#F2D9A4;
+    --accent:#6C70F6; --accent-strong:#AEB0FF; --accent-soft:#25264A; --accent-rgb:108,112,246;
+    --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
+    --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
+    --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
+    --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08); --glow:#1A1B36;
     --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
+    --sh-1:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-2:0 8px 32px rgba(0,0,0,.5);
     color-scheme:dark;
   }
 </style>
 <script>
+  // Theme before first paint, and keep the app hidden until init picked the right screen (no flash of the intro).
   try { var t = localStorage.getItem('aligno_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  document.documentElement.classList.add('booting');
+  setTimeout(function () { document.documentElement.classList.remove('booting'); }, 2500);
 </script>
 </head>
 <body>
@@ -494,7 +540,7 @@
     <div class="content">
       <div class="ld-hero">
         <div class="landing-logo">
-          <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="#8C8FF6" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="var(--al)"/><path d="M24 20v8M20 24h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="#8C8FF6" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="var(--accent)"/><path d="M24 20v8M20 24h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
         </div>
         <h1 class="landing-word">Aligno</h1>
         <p class="landing-tag">Take the same photo, perfectly aligned, every time, so change over time is easy to see.</p>
@@ -527,10 +573,10 @@
   <section class="screen" id="screen-home">
     <div class="topbar">
       <span class="brand">
-        <svg width="29" height="29" viewBox="0 0 24 24" fill="none"><rect x="4.2" y="4.2" width="11" height="11" rx="3.8" stroke="#8C8FF6" stroke-width="1.6"/><rect x="8.8" y="8.8" width="11" height="11" rx="3.8" fill="var(--al)"/><path d="M12 10v4M10 12h4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="29" height="29" viewBox="0 0 24 24" fill="none"><rect x="4.2" y="4.2" width="11" height="11" rx="3.8" stroke="#8C8FF6" stroke-width="1.6"/><rect x="8.8" y="8.8" width="11" height="11" rx="3.8" fill="var(--accent)"/><path d="M12 10v4M10 12h4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
         Aligno
       </span>
-      <button class="tbtn" id="installBtn" style="display:none" aria-label="Install app">
+      <button class="tbtn" id="installBtn" hidden aria-label="Install app">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
       </button>
       <button class="tbtn" id="settingsBtn" aria-label="Settings">
@@ -538,7 +584,7 @@
       </button>
     </div>
     <div class="content">
-      <p class="sectlbl" style="margin-top:6px">Your projects</p>
+      <p class="sectlbl">Your projects</p>
       <div id="projectList"></div>
     </div>
     <div class="footer">
@@ -567,7 +613,7 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg>
         New photo
       </button>
-      <div style="display:flex; gap:10px; width:100%">
+      <div class="row">
         <button class="btn ghost flex" id="reminderBtn">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           Reminder
@@ -588,7 +634,7 @@
     <div class="content">
       <div class="expcard">
         <div class="expstage"><canvas id="expCanvas" width="1" height="1"></canvas></div>
-        <p style="text-align:center; font-size:12.5px; color:var(--txt3); margin:12px 0 0" id="expCount"></p>
+        <p class="exp-count" id="expCount"></p>
       </div>
       <p class="sectlbl">Format</p>
       <div class="seg" id="expFormat">
@@ -611,7 +657,7 @@
         <label class="tgl"><span>Smooth transitions</span><input type="checkbox" id="expFade"><i></i></label>
         <label class="tgl"><span>Pause on the last photo</span><input type="checkbox" id="expHold" checked><i></i></label>
       </div>
-      <div id="gifResult" style="margin-top:20px"></div>
+      <div class="exp-result" id="gifResult"></div>
     </div>
     <div class="footer">
       <button class="btn primary block" id="makeGifBtn">Make GIF</button>
@@ -626,7 +672,7 @@
     <div class="content">
       <p class="sub">A nudge to keep shooting consistently.</p>
       <div id="remOpts"></div>
-      <div class="note" style="margin-top:14px" id="remNote"></div>
+      <div class="note mt-4" id="remNote"></div>
     </div>
     <div class="footer">
       <button class="btn primary block" id="remSave">Save</button>
@@ -656,24 +702,24 @@
       <div class="set-row" id="backupRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span>
         <span class="rt">Back up all photos<span class="rs" id="backupSub">Not backed up yet</span></span>
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
       <div class="set-row" id="restoreRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg></span>
         <span class="rt">Restore from backup<span class="rs">Pick an aligno-backup .zip file</span></span>
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
-      <input type="file" id="restoreInput" accept=".zip,application/zip" style="display:none">
-      <p class="sectlbl" style="margin-top:22px">More</p>
+      <input type="file" id="restoreInput" accept=".zip,application/zip" hidden>
+      <p class="sectlbl">More</p>
       <div class="set-row" id="introRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
         <span class="rt">Show intro again</span>
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
       <div class="set-row danger" id="wipeRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span>
         <span class="rt">Delete all data</span>
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
       <p class="set-foot"><span id="verLbl">Aligno · web preview</span><br>No account · everything stays on your device</p>
     </div>
@@ -687,57 +733,57 @@
     <div class="countdown" id="countdown"></div>
     <div id="flash"></div>
     <div class="cam-top">
-      <button class="ciconbtn glass" id="camClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      <button class="ciconbtn glass" id="camClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <span class="nm" id="camProjName">Align</span>
-      <span style="display:flex; gap:8px">
-        <button class="ciconbtn glass" id="timerBtn" aria-label="Self-timer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></svg><b class="tmr" id="timerLbl"></b></button>
-        <button class="ciconbtn glass" id="libBtn" aria-label="Use a photo from your library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></button>
-        <button class="ciconbtn glass" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
+      <span class="cam-actions">
+        <button class="ciconbtn glass" id="timerBtn" aria-label="Self-timer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></svg><b class="tmr" id="timerLbl"></b></button>
+        <button class="ciconbtn glass" id="libBtn" aria-label="Use a photo from your library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></button>
+        <button class="ciconbtn glass" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
       </span>
     </div>
-    <div class="cbadge" id="cbadge"></div>
-    <div class="libchip glass" id="libChip" style="display:none">
+    <div class="cbadge" id="cbadge" hidden></div>
+    <div class="libchip glass" id="libChip" hidden>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
       <span>Photo from library</span>
       <button id="libReset">Use last photo</button>
     </div>
-    <div class="camhint glass" id="camhint">Take your first photo from a spot you can return to. Next time, the overlay helps you line it up.</div>
+    <div class="camhint glass" id="camhint" hidden>Take your first photo from a spot you can return to. Next time, the overlay helps you line it up.</div>
     <div class="cam-panel">
-      <div class="cam-seg glass" id="modeSeg" style="display:none">
+      <div class="cam-seg glass" id="modeSeg" hidden>
         <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Fade</button>
         <button data-om="edges" id="omEdges"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges</button>
         <button data-om="diff" id="omDiff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>Blend</button>
         <button class="seg-help" id="camHelpBtn" aria-label="How aligning works">?</button>
       </div>
-      <div class="cam-slwrap glass" id="opRow" style="display:none">
-        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
+      <div class="cam-slwrap glass" id="opRow" hidden>
+        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
         <input type="range" id="op" min="0" max="100" value="50">
         <span class="val" id="opv">50%</span>
       </div>
-      <div class="cam-slwrap glass" id="zoomRow" style="display:none">
-        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
+      <div class="cam-slwrap glass" id="zoomRow" hidden>
+        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
         <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
         <span class="val" id="zoomv">1.0×</span>
       </div>
       <div class="cam-controls">
         <div class="cam-side">
           <button class="cpill glass" id="gridBtn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
             <span id="gridLbl">Grid</span>
           </button>
         </div>
         <button class="shutter" id="shot" aria-label="Take photo"><i></i></button>
         <div class="cam-side">
-          <img id="camLastThumb" class="cthumb" style="display:none" alt="previous photo">
+          <img id="camLastThumb" class="cthumb" hidden alt="Open the project">
         </div>
       </div>
     </div>
     <div class="camerr" id="camerr">
       <strong>Camera unavailable</strong>
       <p id="camerrMsg"></p>
-      <button class="btn primary" id="camRetry" style="padding:14px 24px">Try again</button>
+      <button class="btn primary" id="camRetry">Try again</button>
     </div>
-    <input type="file" id="libInput" accept="image/*" style="display:none">
+    <input type="file" id="libInput" accept="image/*" hidden>
   </div>
 
   <div class="cam" id="screen-aligner">
@@ -748,23 +794,23 @@
     <div class="al-frame" id="alFrame" aria-hidden="true"></div>
     <div class="al-cross" aria-hidden="true"></div>
     <div class="cam-top">
-      <button class="ciconbtn glass" id="alClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      <button class="ciconbtn glass" id="alClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <span class="nm" id="alCount">Align</span>
-      <span style="display:flex; gap:8px">
+      <span class="cam-actions">
       <button class="ciconbtn glass al-shape" id="alShapeBtn" aria-label="Change output shape"><span id="alShapeLbl">1:1</span></button>
-      <button class="ciconbtn glass" id="alGhostToggle" aria-label="Toggle guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></button>
+      <button class="ciconbtn glass" id="alGhostToggle" aria-label="Toggle guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></button>
       </span>
     </div>
-    <div class="al-rot" id="alRotLbl"></div>
-    <div class="cbadge" id="alBadge"></div>
-    <div class="camhint glass" id="alHint">Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate. Or tap Auto-center for the moon and other bright subjects.</div>
+    <div class="al-rot" id="alRotLbl" hidden></div>
+    <div class="cbadge" id="alBadge" hidden></div>
+    <div class="camhint glass" id="alHint" hidden>Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate. Or tap Auto-center for the moon and other bright subjects.</div>
     <div class="cam-panel">
       <div class="al-tools">
         <button class="al-tool glass" id="alAuto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Auto-center</button>
         <button class="al-tool glass" id="alResetBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
       </div>
       <div class="cam-slwrap glass">
-        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
+        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
         <input type="range" id="alZoom" min="0" max="100" step="0.1" value="0">
         <span class="val" id="alZoomv">1.0×</span>
       </div>
@@ -774,13 +820,13 @@
         </div>
         <button class="shutter" id="alUse" aria-label="Use this photo"><i></i></button>
         <div class="cam-side">
-          <img id="alPrevThumb" class="cthumb" style="display:none" alt="last aligned photo">
+          <img id="alPrevThumb" class="cthumb" hidden alt="Last aligned photo">
         </div>
       </div>
     </div>
   </div>
 
-  <input type="file" id="alignFilesInput" accept="image/*" multiple style="display:none">
+  <input type="file" id="alignFilesInput" accept="image/*" multiple hidden>
 
 </div>
 
@@ -795,11 +841,11 @@
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
       <span>Take each photo from the same spot. The overlay lines the new shot up with the last one.</span>
     </div>
-    <div style="display:flex; gap:10px; margin-top:18px">
+    <div class="sheet-actions">
       <button class="btn ghost flex" id="newCancel">Cancel</button>
       <button class="btn primary flex" id="newCreate">Create</button>
     </div>
-    <button class="btn ghost block" id="newImportBtn" style="margin-top:10px">
+    <button class="btn ghost block mt-3" id="newImportBtn">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>
       Import &amp; align existing photos
     </button>
@@ -810,22 +856,22 @@
 <div class="photoview" id="photoView">
   <img id="photoViewImg" alt="Photo">
   <div class="pv-cap" id="photoViewCap"></div>
-  <button class="pv-close" id="photoViewClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+  <button class="pv-close" id="photoViewClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
   <div class="pv-bar">
     <button class="pv-act" id="pvDate"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Date</span></button>
     <button class="pv-act" id="pvCompare"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 4v16"/></svg><span>Compare</span></button>
     <button class="pv-act" id="pvShare"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span>Share</span></button>
     <button class="pv-act danger" id="pvDelete"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>
   </div>
-  <button class="pv-nav prev" id="pvPrev" aria-label="Previous photo"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-  <button class="pv-nav next" id="pvNext" aria-label="Next photo"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+  <button class="pv-nav prev" id="pvPrev" hidden aria-label="Previous photo"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="pv-nav next" id="pvNext" hidden aria-label="Next photo"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
 </div>
 
 <div class="cmpview" id="cmpView">
   <div class="cam-top">
-    <button class="ciconbtn glass" id="cmpClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <button class="ciconbtn glass" id="cmpClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     <span class="nm">Compare</span>
-    <button class="ciconbtn glass" id="cmpShare" aria-label="Share before and after image"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+    <button class="ciconbtn glass" id="cmpShare" aria-label="Share before and after image"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
   </div>
   <div class="cmp-area" id="cmpArea">
     <div class="cmp-stage" id="cmpStage">
@@ -852,18 +898,18 @@
     <div class="set-row" id="moreImport">
       <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg></span>
       <span class="rt">Import photos</span>
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
     </div>
     <div class="set-row" id="moreRename">
       <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
       <span class="rt">Rename project</span>
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
     </div>
     <div class="set-row danger" id="moreDelete">
       <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span>
       <span class="rt">Delete project</span>
     </div>
-    <button class="btn ghost block" id="moreCancel" style="margin-top:6px">Cancel</button>
+    <button class="btn ghost block" id="moreCancel">Cancel</button>
   </div>
 </div>
 
@@ -873,9 +919,9 @@
     <h3 id="shareTitle">Add photos</h3>
     <p class="sheet-sub">Pick a project. You’ll line up each photo before it’s added.</p>
     <div id="shareList"></div>
-    <p class="sectlbl" style="margin-top:8px">Or start a new project</p>
+    <p class="sectlbl">Or start a new project</p>
     <input class="field" id="shareName" placeholder="e.g. Full moon" autocomplete="off">
-    <div style="display:flex; gap:10px; margin-top:14px">
+    <div class="sheet-actions">
       <button class="btn ghost flex" id="shareCancel">Cancel</button>
       <button class="btn primary flex" id="shareCreate">Create &amp; align</button>
     </div>
@@ -891,23 +937,23 @@
       <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg></span><div><b>Edges</b><span>Only the outlines of your last photo, in pink. Easiest when the scene itself changed a lot.</span></div></div>
       <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></span><div><b>Blend</b><span>Shows the difference. The darker the screen, the better you’re lined up. Move until it goes almost black.</span></div></div>
     </div>
-    <p class="sectlbl" style="margin-top:6px">Handy extras</p>
+    <p class="sectlbl">Handy extras</p>
     <ul class="help-tips">
       <li><b>Grid</b> also shows a level, so the phone is straight every time.</li>
       <li><b>Timer</b> (top) gives you 3 or 10 seconds, handy for photos of yourself.</li>
       <li><b>Photo icon</b> (top) lines up against any picture from your gallery instead.</li>
     </ul>
-    <button class="btn primary block" id="camHelpOk" style="margin-top:16px">Got it</button>
+    <button class="btn primary block mt-6" id="camHelpOk">Got it</button>
   </div>
 </div>
 
-<div class="modal-bg" id="dateModal" style="z-index:70">
+<div class="modal-bg top" id="dateModal">
   <div class="sheet">
     <div class="grab"></div>
     <h3>Photo date</h3>
     <p class="sheet-sub">Photos are kept in date order. Fix the date if an imported photo landed in the wrong place.</p>
     <input class="field" type="datetime-local" id="dateInput">
-    <div style="display:flex; gap:10px; margin-top:18px">
+    <div class="sheet-actions">
       <button class="btn ghost flex" id="dateCancel">Cancel</button>
       <button class="btn primary flex" id="dateSave">Save</button>
     </div>
@@ -919,21 +965,35 @@
     <div class="grab"></div>
     <h3>Rename project</h3>
     <input class="field" id="renName" autocomplete="off">
-    <div style="display:flex; gap:10px; margin-top:18px">
+    <div class="sheet-actions">
       <button class="btn ghost flex" id="renCancel">Cancel</button>
       <button class="btn primary flex" id="renSave">Save</button>
     </div>
   </div>
 </div>
 
-<div class="modal-bg" id="cfModal">
+<div class="modal-bg" id="iosInstallModal">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h3>Add Aligno to your Home Screen</h3>
+    <p class="sheet-sub">Then it opens full screen like any other app, and works offline.</p>
+    <ol class="ios-steps">
+      <li>Tap <b>Share</b> <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg> in the Safari toolbar.</li>
+      <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+      <li>Tap <b>Add</b>.</li>
+    </ol>
+    <button class="btn primary block mt-6" id="iosInstallOk">Got it</button>
+  </div>
+</div>
+
+<div class="modal-bg top" id="cfModal">
   <div class="sheet">
     <div class="grab"></div>
     <h3 id="cfTitle">Are you sure?</h3>
-    <p class="sheet-sub" id="cfMsg" style="margin-bottom:6px"></p>
-    <div style="display:flex; gap:10px; margin-top:14px">
+    <p class="sheet-sub" id="cfMsg"></p>
+    <div class="sheet-actions">
       <button class="btn ghost flex" id="cfCancel">Cancel</button>
-      <button class="btn dangerf flex" id="cfOk">Delete</button>
+      <button class="btn danger flex" id="cfOk">Delete</button>
     </div>
   </div>
 </div>
