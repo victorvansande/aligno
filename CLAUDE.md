@@ -21,7 +21,7 @@ Progress camera PWA: take the same photo over time, lined up with a ghost overla
 
 ## Testing locally
 
-Serve the folder over HTTP (the camera and IndexedDB need a real origin, not `file://`):
+Serve the folder over HTTP (the camera and IndexedDB need a real origin, not `file://`). On Windows: `powershell -ExecutionPolicy Bypass -File serve.ps1` (port 5200). Elsewhere:
 
 ```bash
 python3 -m http.server 5200

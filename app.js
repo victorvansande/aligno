@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 const DB_NAME = 'aligno';
 let db = null;
 
@@ -1484,7 +1484,7 @@ function startExportPreview() {
   if (!exp.photos.length || !exp.thumbs.length) { cv.width = 1; cv.height = 1; return; }
   const { W, H } = expSize(560);
   cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d');
+  const ctx = smooth(cv.getContext('2d'));
   exp.t0 = performance.now();
   const step = () => {
     const { total } = expTimeline();
@@ -1499,15 +1499,30 @@ function startExportPreview() {
 
 /* Renders every photo once, cover-cropped to the export size, as a small JPEG
    so memory stays flat no matter how long the series is. */
+function smooth(ctx) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; return ctx; }
+/* Big photos are halved step by step before the final resize: one huge
+   downscale in a single drawImage skips pixels and looks jagged. */
+function downscaled(im, W, H) {
+  const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const tw = iw * Math.max(W / iw, H / ih);
+  let src = im, w = iw, h = ih;
+  while (w / 2 >= tw) {
+    w = Math.round(w / 2); h = Math.round(h / 2);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    smooth(c.getContext('2d')).drawImage(src, 0, 0, w, h);
+    src = c;
+  }
+  return src;
+}
 async function prepFrames(W, H, onStep) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
+  const ctx = smooth(c.getContext('2d'));
   const out = [];
   for (let i = 0; i < exp.photos.length; i++) {
     const im = await loadImage(urlFor(exp.photos[i], 'full'));
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-    drawCover(ctx, im, W, H);
-    out.push(await toBlobP(c, 'image/jpeg', 0.93));
+    drawCover(ctx, downscaled(im, W, H), W, H);
+    out.push(await toBlobP(c, 'image/jpeg', 0.95));
     if (onStep) onStep(i + 1, exp.photos.length);
   }
   return out;
@@ -1517,13 +1532,18 @@ function blobBitmap(b) {
   return loadImage(URL.createObjectURL(b));
 }
 
+/* Videos play the series at least 4 times, and short series repeat until the
+   video lasts about 8 seconds, so two photos don't make a blink-and-gone clip
+   on players that don't loop. */
+function videoLoops(once) { return Math.max(4, Math.ceil(8 / Math.max(0.1, once))); }
+
 async function makeVideo(setStatus) {
   const type = videoType();
   if (!type) throw new Error('Video isn’t supported in this browser');
   const { W, H } = expSize(1080);
   const blobs = await prepFrames(W, H, (i, n) => setStatus('Preparing photos… ' + i + '/' + n));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d');
+  const ctx = smooth(cv.getContext('2d'));
   const bmps = new Map();
   const getBmp = async (i) => {
     if (i < 0 || i >= blobs.length) return null;
@@ -1538,19 +1558,22 @@ async function makeVideo(setStatus) {
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   const stopped = new Promise(r => { rec.onstop = r; });
   rec.start(500);
-  const { total } = expTimeline();
+  const { n, total: once } = expTimeline();
+  const total = once * videoLoops(once);
   let t0 = performance.now();
   await new Promise((resolve) => {
     const tick = async () => {
       const sec = (performance.now() - t0) / 1000;
       if (sec >= total) { resolve(); return; }
-      const f = frameAt(sec);
+      const f = frameAt(sec % once);
       const wait0 = performance.now();
       const [a, b] = await Promise.all([getBmp(f.i), f.t > 0 ? getBmp(f.i + 1) : null]);
       t0 += performance.now() - wait0 > 40 ? performance.now() - wait0 : 0;
       drawFrame(ctx, W, H, a, b, f.t, exp.photos[f.i].ts, exp.photos[f.i + 1] && exp.photos[f.i + 1].ts);
       getBmp(f.i + 1); getBmp(f.i + 2);
-      bmps.forEach((p, k) => { if (k < f.i - 1) { p.then(x => x && x.close && x.close()); bmps.delete(k); } });
+      if (f.i >= n - 2) getBmp(0);
+      // Photos 0 and 1 stay decoded: every repeat starts with them again.
+      bmps.forEach((p, k) => { if (k > 1 && k < f.i - 1) { p.then(x => x && x.close && x.close()); bmps.delete(k); } });
       setStatus('Recording… ' + Math.min(99, Math.round(sec / total * 100)) + '%');
       setTimeout(tick, 1000 / 30);
     };
@@ -1564,18 +1587,93 @@ async function makeVideo(setStatus) {
   return { blob: new Blob(chunks, { type: base }), ext: base === 'video/mp4' ? 'mp4' : 'webm' };
 }
 
+/* GIFs allow only 256 colors. One palette for the whole GIF (sampled from
+   every photo) keeps unchanged areas identical from frame to frame, and
+   Floyd-Steinberg dithering hides the color steps that otherwise show up as
+   bands and blocks in skies, walls and skin. */
+function buildGlobalPalette(quantize, frames) {
+  const per = Math.max(1, Math.floor(400000 / frames.length));
+  const sample = new Uint8Array(per * frames.length * 4);
+  let o = 0;
+  for (const d of frames) {
+    const px = d.length / 4, step = Math.max(1, Math.floor(px / per));
+    for (let p = 0; p < px && o < sample.length; p += step) {
+      const i = p * 4;
+      sample[o++] = d[i]; sample[o++] = d[i + 1]; sample[o++] = d[i + 2]; sample[o++] = 255;
+    }
+  }
+  return quantize(sample.subarray(0, o), 256);
+}
+function ditherToPalette(data, W, H, palette, cache) {
+  const out = new Uint8Array(W * H);
+  const err = new Float32Array((W + 2) * 2 * 3);
+  const nearest = (r, g, b) => {
+    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    let idx = cache[key];
+    if (idx < 0) {
+      let best = 1e9;
+      for (let k = 0; k < palette.length; k++) {
+        const c = palette[k], dr = r - c[0], dg = g - c[1], db = b - c[2];
+        const dist = dr * dr * 2 + dg * dg * 4 + db * db * 3;
+        if (dist < best) { best = dist; idx = k; }
+      }
+      cache[key] = idx;
+    }
+    return idx;
+  };
+  const S = 0.85; // a little less than full error spread: less visible grain
+  for (let y = 0; y < H; y++) {
+    const cur = (y & 1) * (W + 2) * 3, nxt = ((y + 1) & 1) * (W + 2) * 3;
+    err.fill(0, nxt, nxt + (W + 2) * 3);
+    const ltr = !(y & 1);
+    for (let n = 0; n < W; n++) {
+      const x = ltr ? n : W - 1 - n, dir = ltr ? 1 : -1;
+      const i = (y * W + x) * 4, e = cur + (x + 1) * 3;
+      const r = Math.max(0, Math.min(255, data[i] + err[e]));
+      const g = Math.max(0, Math.min(255, data[i + 1] + err[e + 1]));
+      const b = Math.max(0, Math.min(255, data[i + 2] + err[e + 2]));
+      const k = nearest(r | 0, g | 0, b | 0), c = palette[k];
+      out[y * W + x] = k;
+      const er = (r - c[0]) * S, eg = (g - c[1]) * S, eb = (b - c[2]) * S;
+      const a = e + dir * 3, bl = nxt + (x + 1 - dir) * 3, bm = nxt + (x + 1) * 3, br = nxt + (x + 1 + dir) * 3;
+      err[a] += er * 7 / 16; err[a + 1] += eg * 7 / 16; err[a + 2] += eb * 7 / 16;
+      err[bl] += er * 3 / 16; err[bl + 1] += eg * 3 / 16; err[bl + 2] += eb * 3 / 16;
+      err[bm] += er * 5 / 16; err[bm + 1] += eg * 5 / 16; err[bm + 2] += eb * 5 / 16;
+      err[br] += er / 16; err[br + 1] += eg / 16; err[br + 2] += eb / 16;
+    }
+  }
+  return out;
+}
+
 async function makeGifBlob(setStatus) {
-  const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
-  const { W, H } = expSize(540);
+  const { GIFEncoder, quantize } = await loadGifenc();
+  const { W, H } = expSize(720);
   const blobs = await prepFrames(W, H, (i, n) => setStatus('Preparing photos… ' + i + '/' + n));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
-  const enc = GIFEncoder();
+  smooth(ctx);
   const { n, slot, hold } = expTimeline();
+
+  // First pass: render every frame once to build the shared palette.
+  setStatus('Picking colors…');
+  const samples = [];
+  for (let i = 0; i < n; i++) {
+    const bm = await blobBitmap(blobs[i]);
+    drawFrame(ctx, W, H, bm, null, 0, exp.photos[i].ts);
+    samples.push(ctx.getImageData(0, 0, W, H).data);
+    if (bm.close) bm.close();
+  }
+  const palette = buildGlobalPalette(quantize, samples);
+  samples.length = 0;
+  const cache = new Int16Array(32768).fill(-1);
+
+  const enc = GIFEncoder();
+  let first = true;
   const put = (delaySec) => {
     const data = ctx.getImageData(0, 0, W, H).data;
-    const palette = quantize(data, 256);
-    enc.writeFrame(applyPalette(data, palette), W, H, { palette, delay: Math.max(20, Math.round(delaySec * 1000)) });
+    const opts = { delay: Math.max(20, Math.round(delaySec * 1000)) };
+    if (first) { opts.palette = palette; opts.repeat = 0; first = false; }
+    enc.writeFrame(ditherToPalette(data, W, H, palette, cache), W, H, opts);
   };
   let prev = await blobBitmap(blobs[0]);
   for (let i = 0; i < n; i++) {
@@ -1617,7 +1715,8 @@ async function makeExport() {
     res.appendChild(media);
     const mb = out.blob.size / 1048576;
     const info = document.createElement('p'); info.className = 'exp-info';
-    info.textContent = (out.ext === 'gif' ? 'GIF' : out.ext.toUpperCase() + ' video') + ' · ' + (mb >= 1 ? mb.toFixed(1) + ' MB' : Math.max(1, Math.round(out.blob.size / 1024)) + ' KB');
+    info.textContent = (out.ext === 'gif' ? 'GIF' : out.ext.toUpperCase() + ' video') + ' · ' + (mb >= 1 ? mb.toFixed(1) + ' MB' : Math.max(1, Math.round(out.blob.size / 1024)) + ' KB') +
+      (out.ext === 'gif' ? ' · loops forever' : ' · series plays ' + videoLoops(expTimeline().total) + '×');
     res.appendChild(info);
     const row = document.createElement('div'); row.style.cssText = 'display:flex; gap:10px';
     const a = document.createElement('a'); a.href = url; a.download = fname;
