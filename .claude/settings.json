@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && echo \"branch: $(git branch --show-current), last commit: $(git log -1 --format=%s)\" && python3 tools/check.py || true"
+          }
+        ]
+      }
+    ]
+  }
+}

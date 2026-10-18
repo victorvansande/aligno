@@ -31,6 +31,23 @@ Then open http://localhost:5200/. The service worker is deliberately not registe
 
 Check the browser console for errors after changes. For layout or overflow issues, measure with `getBoundingClientRect()` rather than trusting scaled screenshots.
 
+## Checks (run before every commit, locally and in the cloud)
+
+```bash
+python3 tools/check.py        # version sync, BOM, em dashes, $('id') vs markup
+node tools/smoke.cjs shot.png # headless Chromium: loads the app, fails on console errors or horizontal overflow
+```
+
+`smoke.cjs` serves the repo itself on port 5200, uses a fake camera, and takes `WIDTH`/`HEIGHT` env vars (default 390x844). It needs Playwright, which cloud sessions have preinstalled; locally run `npm i -g playwright` once if you want it. `tools/` and `.claude/` are dev-only: they are not in the service worker's `ASSETS`, so they don't affect the app.
+
 ## Deploying
 
 Commit and push to `main`. GitHub Pages publishes in about 30 seconds. Confirm by fetching `https://victorvansande.github.io/aligno/app.js` and checking the `APP_VERSION` line.
+
+Commits that only touch dev files (`CLAUDE.md`, `tools/`, `.claude/`) don't need a version bump, since the app files are unchanged.
+
+## Cloud sessions (Claude Code on the web)
+
+- `.claude/settings.json` runs a SessionStart hook that prints the branch and runs `tools/check.py`.
+- Cloud sessions get a working branch (like `main-xxxx`). The site only updates from `main`, so when Victor asks for a deploy, push to `main` (or merge the working branch into it).
+- `victorvansande.github.io` is blocked by the default cloud network policy. Verify a deploy through the GitHub MCP instead: `actions_list` → `list_workflow_runs` and check that the newest "pages build and deployment" run has the pushed commit's SHA and `conclusion: success`. Or add `victorvansande.github.io` under Allowed domains in the environment's network settings to fetch `app.js` directly.
