@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v42';
+const CACHE = 'aligno-v43';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [
@@ -6,6 +6,7 @@ const ASSETS = [
   './index.html',
   './app.js',
   './gifenc.js',
+  './align-worker.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

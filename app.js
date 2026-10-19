@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v42';
+const APP_VERSION = 'v43';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -841,8 +841,89 @@ function alignTick() {
   ring.classList.toggle('ok', ok);
   $('shot').setAttribute('aria-label', ok ? 'Take photo, lined up with your last photo' : 'Take photo');
 }
-function startAlignScore() { stopAlignScore(); align.timer = setInterval(alignTick, 200); }
-function stopAlignScore() { clearInterval(align.timer); align.timer = 0; align.ema = 0; align.ok = false; $('alignRing').classList.remove('on', 'ok'); }
+function startAlignScore() { stopAlignScore(); align.timer = setInterval(alignTick, 200); guide.timer = setInterval(guideTick, 350); }
+function stopAlignScore() {
+  clearInterval(align.timer); align.timer = 0; align.ema = 0; align.ok = false; $('alignRing').classList.remove('on', 'ok');
+  clearInterval(guide.timer); guide.timer = 0; showGuide(null);
+}
+
+/* Live guide: says what to do to line up with the last photo ("Step back",
+   "Move left", "Turn clockwise"), one thing at a time, the biggest first.
+   It only speaks when the measurement is certain (see certain()) and the same
+   advice comes out twice in a row; otherwise it shows nothing. Silent once
+   the shutter ring is green. A tap hides it until the camera opens again. */
+const LIVE_OPTS = { sMin: 0.8, sMax: 1.25, thMax: 10, shift: 10 };
+const guide = { timer: 0, busy: false, refUrl: null, cand: null, streak: 0, shown: null, miss: 0, off: false, track: null, n: 0 };
+const GUIDE_ARROW = d => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+const GUIDES = {
+  back: { t: 'Step back', i: GUIDE_ARROW('<path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5M9 5v4H5M15 5v4h4M9 19v-4H5M15 19v-4h4"/>') },
+  closer: { t: 'Step closer', i: GUIDE_ARROW('<path d="M9 9L4 4M15 9l5-5M9 15l-5 5M15 15l5 5M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') },
+  left: { t: 'Move left', i: GUIDE_ARROW('<path d="M19 12H5M11 6l-6 6 6 6"/>') },
+  right: { t: 'Move right', i: GUIDE_ARROW('<path d="M5 12h14M13 6l6 6-6 6"/>') },
+  up: { t: 'Move up', i: GUIDE_ARROW('<path d="M12 19V5M6 11l6-6 6 6"/>') },
+  down: { t: 'Move down', i: GUIDE_ARROW('<path d="M12 5v14M6 13l6 6 6-6"/>') },
+  cw: { t: 'Turn clockwise', i: GUIDE_ARROW('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>') },
+  ccw: { t: 'Turn counterclockwise', i: GUIDE_ARROW('<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/>') }
+};
+function showGuide(k) {
+  const el = $('guide');
+  if (guide.shown === k) return;
+  guide.shown = k;
+  if (!k) { el.hidden = true; return; }
+  el.innerHTML = GUIDES[k].i + '<span>' + GUIDES[k].t + '</span>';
+  el.setAttribute('aria-label', GUIDES[k].t + '. Tap to hide');
+  el.hidden = false;
+}
+// Which single piece of advice fits best; null when it is close enough.
+function guideAdvice(r) {
+  let tx = r.tx, th = r.th;
+  // The front camera is shown mirrored: left and right swap on screen.
+  if (facing === 'user') { tx = -tx; th = -th; }
+  const opts = [
+    { k: r.s > 1 ? 'back' : 'closer', e: Math.abs(Math.log(r.s)) / 0.05 },
+    { k: th > 0 ? 'cw' : 'ccw', e: Math.abs(th) * 180 / Math.PI / 2.5 },
+    { k: tx > 0 ? 'right' : 'left', e: Math.abs(tx) / 0.04 },
+    { k: r.ty > 0 ? 'down' : 'up', e: Math.abs(r.ty) / 0.04 }
+  ].sort((a, b) => b.e - a.e);
+  return opts[0].e >= 1 ? opts[0].k : null;
+}
+function guideResult(r) {
+  if (!guide.timer) return;
+  const sure = certain(r, 0.6);
+  guide.track = sure ? r : null;
+  const k = sure ? guideAdvice(r) : null;
+  if (!k) {
+    guide.cand = null; guide.streak = 0;
+    // Let go only after two quiet results, so the pill does not flicker.
+    if (++guide.miss >= 2) showGuide(null);
+    return;
+  }
+  guide.miss = 0;
+  guide.streak = k === guide.cand ? guide.streak + 1 : 1;
+  guide.cand = k;
+  if (guide.streak >= 2) showGuide(k);
+}
+function guideTick() {
+  const v = $('video');
+  const quiet = guide.off || !camHasOverlay || !stream || !v.videoWidth || document.hidden || align.ok || !$('cbadge').hidden || countdownT;
+  if (quiet) { guide.cand = null; guide.streak = 0; showGuide(null); return; }
+  if (guide.busy) return;
+  guide.busy = true;
+  (async () => {
+    try {
+      const ref = overlayRaw;
+      if (guide.refUrl !== ref) {
+        const im = await loadImage(ref);
+        await awCall({ refKey: 'live', ref: grayPyramid(im, crop34(im.naturalWidth, im.naturalHeight)) });
+        guide.refUrl = ref; guide.track = null;
+      }
+      // Follow a certain answer cheaply; search everything again every 2 seconds.
+      const near = guide.track && (++guide.n % 6) ? guide.track : null;
+      const r = await awCall({ refKey: 'live', mov: grayPyramid(v, viewCrop(v.videoWidth, v.videoHeight)), opts: near ? { near } : LIVE_OPTS });
+      if (guide.refUrl === overlayRaw) guideResult(r);
+    } catch (e) {} finally { guide.busy = false; }
+  })();
+}
 
 /* Hints never block the camera: one quiet line under the mode tabs that
    fades after a few seconds (shown on the first visits and when you switch
@@ -1077,7 +1158,7 @@ async function openCamera() {
   if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
   zoom.last = last && typeof last.zoom === 'number' ? last.zoom : null;
   zoom.lens = 'main';
-  align.told = false;
+  align.told = false; guide.off = false;
   show('camera');
   layoutCamera();
   await startCamera();
@@ -2120,14 +2201,189 @@ async function deleteViewedPhoto() {
   openPhotoViewAt(Math.min(oldIndex, viewList.length - 1));
 }
 
+/* --- Alignment engine (align-worker.js): measures shift, turn and scale
+   between two pictures. Both Stabilize and the live guide use it, and both
+   only act on a measurement that is clearly certain; otherwise they leave
+   things as they are. --- */
+const AW = { worker: null, seq: 0, wait: new Map() };
+function awCall(msg) {
+  return new Promise(resolve => {
+    try {
+      if (!AW.worker) {
+        AW.worker = new Worker('./align-worker.js');
+        AW.worker.onmessage = e => { const r = AW.wait.get(e.data.id); if (r) { AW.wait.delete(e.data.id); r(e.data.result); } };
+        AW.worker.onerror = () => { AW.wait.forEach(r => r({ ok: false, why: 'worker' })); AW.wait.clear(); AW.worker = null; };
+      }
+      const id = ++AW.seq;
+      AW.wait.set(id, resolve);
+      AW.worker.postMessage(Object.assign({ id }, msg));
+    } catch (e) { resolve({ ok: false, why: 'worker' }); }
+  });
+}
+// Centre 3:4 cut of a picture: the frame every measurement uses.
+function crop34(iw, ih) {
+  let sw = iw, sh = ih;
+  if (iw / ih > 3 / 4) sw = ih * 3 / 4; else sh = iw * 4 / 3;
+  return { sx: (iw - sw) / 2, sy: (ih - sh) / 2, sw, sh };
+}
+let pyrCv = null;
+// Halves a gray picture: each pixel is the average of a 2×2 block.
+function halve(g, w, h) {
+  const W = w >> 1, H = Math.round(W * 4 / 3), out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const y0 = Math.min(h - 1, 2 * y) * w, y1 = Math.min(h - 1, 2 * y + 1) * w;
+    for (let x = 0; x < W; x++) out[y * W + x] = (g[y0 + 2 * x] + g[y0 + 2 * x + 1] + g[y1 + 2 * x] + g[y1 + 2 * x + 1]) / 4;
+  }
+  return out;
+}
+/* Gray pictures at 32, 64 and 128 px wide. Reading pixels back from a canvas
+   is the slow part, so only the 128 one is read; the smaller ones are
+   averaged from it. */
+function grayPyramid(src, k) {
+  if (!pyrCv) pyrCv = [256, 128].map(w => Object.assign(document.createElement('canvas'), { width: w, height: Math.round(w * 4 / 3) }));
+  const [big, c] = pyrCv;
+  smooth(big.getContext('2d')).drawImage(src, k.sx, k.sy, k.sw, k.sh, 0, 0, big.width, big.height);
+  const x = smooth(c.getContext('2d', { willReadFrequently: true }));
+  x.drawImage(big, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height).data, g128 = new Float32Array(c.width * c.height);
+  for (let i = 0; i < g128.length; i++) g128[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const g64 = halve(g128, 128, c.height), g32 = halve(g64, 64, Math.round(64 * 4 / 3));
+  return [g32, g64, g128];
+}
+/* "Certain" means all of this: enough detail in both pictures, a match that
+   is clearly better than any other position (not a repeating pattern), not at
+   the edge of what was searched, a good fit, and better than leaving it be. */
+function certain(r, minFit) {
+  return !!(r && r.ok && !r.edge && r.tex >= 6 && r.distinct >= 0.15 && r.v >= minFit && r.v >= r.id - 0.005);
+}
+const T_ID = { ar: 1, ai: 0, br: 0, bi: 0 };
+function tFrom(r) { return { ar: r.s * Math.cos(r.th), ai: r.s * Math.sin(r.th), br: r.tx, bi: r.ty }; }
+// B after A: u -> B(A(u)).
+function tCompose(B, A) {
+  return { ar: B.ar * A.ar - B.ai * A.ai, ai: B.ar * A.ai + B.ai * A.ar,
+    br: B.ar * A.br - B.ai * A.bi + B.br, bi: B.ar * A.bi + B.ai * A.br + B.bi };
+}
+function tParts(t) { return { s: Math.hypot(t.ar, t.ai), th: Math.atan2(t.ai, t.ar), tx: t.br, ty: t.bi }; }
+function median(a) { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+
+/* --- Stabilize (Export): every photo is measured against the first one; if
+   that is not certain (the scene changed over time), against the last photo
+   that was lined up. Photos that stay uncertain, or would need too much
+   cropping, are left exactly as taken and counted in the note. The output is
+   centred on the typical position of the series and cropped just enough
+   that no photo shows an empty edge. The photos themselves never change. --- */
+const STAB_OPTS = { sMin: 0.85, sMax: 1.18, thMax: 8, shift: 8 };
+const STAB_ZMAX = 1.2;
+const stab = { key: null, T: null, running: null, z: {}, frames: null, framesKey: null, done: 0, failed: 0 };
+function setStabInfo(t) { $('stabInfo').textContent = t; }
+const STAB_IDLE = 'Lines the photos up for you, so only your subject changes';
+// How far the picture must be zoomed so that photo i covers the whole frame.
+function zoomNeeded(T, iw, ih, W, H) {
+  const k = Math.min(iw, ih * 3 / 4), r = Math.max(W / iw, H / ih);
+  const fits = z => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => {
+    const ux = sx * W / 2 / (r * k * z), uy = sy * H / 2 / (r * k * z);
+    const qx = iw / 2 + k * (T.ar * ux - T.ai * uy + T.br), qy = ih / 2 + k * (T.ai * ux + T.ar * uy + T.bi);
+    return qx >= -0.5 && qy >= -0.5 && qx <= iw + 0.5 && qy <= ih + 0.5;
+  });
+  if (fits(1)) return 1;
+  if (!fits(2)) return Infinity;
+  let lo = 1, hi = 2;
+  for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; }
+  return hi;
+}
+function stabZoom(W, H) {
+  const key = W + 'x' + H;
+  if (stab.z[key]) return stab.z[key];
+  let z = 1;
+  stab.T.forEach((T, i) => { const im = exp.thumbs[i]; if (T && im) z = Math.max(z, zoomNeeded(T, im.naturalWidth, im.naturalHeight, W, H)); });
+  return (stab.z[key] = Math.min(z, 1.6));
+}
+// Draws photo `src` into W×H through transform T, zoomed in by z.
+function drawStab(ctx, src, W, H, T, z) {
+  const iw = src.naturalWidth || src.width, ih = src.naturalHeight || src.height;
+  const k = Math.min(iw, ih * 3 / 4), r = Math.max(W / iw, H / ih), D = r * k * z;
+  const n2 = T.ar * T.ar + T.ai * T.ai, mr = D / k * T.ar / n2, mi = -D / k * T.ai / n2;
+  const cx = iw / 2 + k * T.br, cy = ih / 2 + k * T.bi;
+  ctx.setTransform(mr, mi, -mi, mr, W / 2 - (mr * cx - mi * cy), H / 2 - (mi * cx + mr * cy));
+  ctx.drawImage(src, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+async function computeStab() {
+  const key = exp.photos.map(p => p.id).join(',');
+  if (stab.key === key && stab.T) return true;
+  if (stab.running && stab.running.key === key) return stab.running.p;
+  const job = { key };
+  job.p = (async () => {
+    const n = exp.photos.length, ims = exp.thumbs;
+    if (n < 2 || ims.some(im => !im)) return false;
+    const pyr = i => grayPyramid(ims[i], crop34(ims[i].naturalWidth, ims[i].naturalHeight));
+    const T = new Array(n).fill(null);
+    T[0] = T_ID;
+    await awCall({ refKey: 'stab-first', ref: pyr(0) });
+    let prev = 0;
+    for (let i = 1; i < n; i++) {
+      if (stab.running !== job) return false;
+      setStabInfo('Lining up photos… ' + i + ' of ' + (n - 1));
+      const mov = pyr(i);
+      const r = await awCall({ refKey: 'stab-first', mov, opts: STAB_OPTS });
+      let t = certain(r, 0.6) ? (r.v - r.id < 0.005 ? T_ID : tFrom(r)) : null;
+      if (!t && prev > 0) {
+        const r2 = await awCall({ refKey: 'stab-prev', mov, opts: STAB_OPTS });
+        if (certain(r2, 0.6)) t = tCompose(r2.v - r2.id < 0.005 ? T_ID : tFrom(r2), T[prev]);
+      }
+      T[i] = t;
+      if (t) { await awCall({ refKey: 'stab-prev', ref: mov }); prev = i; }
+    }
+    // Centre on the typical position, so the crop stays as small as possible.
+    const ok = T.map((t, i) => t ? i : -1).filter(i => i >= 0);
+    const parts = ok.map(i => tParts(T[i]));
+    const s = median(parts.map(p => p.s)), th = median(parts.map(p => p.th));
+    const C = { ar: s * Math.cos(th), ai: s * Math.sin(th), br: median(parts.map(p => p.tx)), bi: median(parts.map(p => p.ty)) };
+    // Output frame = the typical photo: photo i is reached through C⁻¹, then T.
+    const n2 = C.ar * C.ar + C.ai * C.ai, Ci = { ar: C.ar / n2, ai: -C.ai / n2 };
+    Ci.br = -(Ci.ar * C.br - Ci.ai * C.bi); Ci.bi = -(Ci.ar * C.bi + Ci.ai * C.br);
+    const out = T.map(t => t ? tCompose(t, Ci) : null);
+    // Photos that would need too much cropping stay as taken.
+    out.forEach((t, i) => {
+      const im = ims[i];
+      if (t && zoomNeeded(t, im.naturalWidth, im.naturalHeight, im.naturalWidth, im.naturalHeight) > STAB_ZMAX) out[i] = null;
+    });
+    if (stab.running !== job) return false;
+    stab.key = key; stab.T = out; stab.z = {}; stab.frames = null;
+    stab.done = out.filter(Boolean).length; stab.failed = n - stab.done;
+    return true;
+  })();
+  stab.running = job;
+  const res = await job.p;
+  if (stab.running === job) stab.running = null;
+  return res;
+}
+function stabNote() {
+  const n = exp.photos.length;
+  if (!stab.T) return STAB_IDLE;
+  if (stab.done <= 1) return 'Couldn’t find enough in common between the photos. They stay as taken.';
+  if (!stab.failed) return 'All ' + n + ' photos lined up.';
+  return stab.done + ' of ' + n + ' photos lined up. ' + stab.failed + (stab.failed === 1 ? ' was' : ' were') + ' too different to be sure and ' + (stab.failed === 1 ? 'stays' : 'stay') + ' as taken.';
+}
+function stabActive() { return exp.stab && stab.T && stab.key === exp.photos.map(p => p.id).join(',') && stab.done > 1; }
+function stabTransform(i) { return (stab.T && stab.T[i]) || T_ID; }
+async function syncStab() {
+  if (!exp.stab || exp.photos.length < 2) { setStabInfo(STAB_IDLE); startExportPreview(); return; }
+  if (!exp.thumbs.length) return;
+  const ok = await computeStab();
+  if (!exp.stab) return;
+  setStabInfo(ok ? stabNote() : STAB_IDLE);
+  startExportPreview();
+}
+
 /* --- Export: GIF or video, with shape, date stamp, crossfade and a hold on
    the last photo. The preview runs the exact same timeline and drawing code
    as the export, just on thumbnails. --- */
-const exp = { photos: [], thumbs: [], name: 'aligno', fps: 3, format: 'gif', shape: 'original', dates: false, fade: false, hold: true, raf: 0, t0: 0, busy: false };
+const exp = { photos: [], thumbs: [], name: 'aligno', fps: 3, format: 'gif', shape: 'original', dates: false, fade: false, hold: true, stab: false, raf: 0, t0: 0, busy: false };
 try { Object.assign(exp, JSON.parse(localStorage.getItem('aligno_export') || '{}')); } catch (e) {}
 exp.busy = false;
 function saveExportPrefs() {
-  try { localStorage.setItem('aligno_export', JSON.stringify({ fps: exp.fps, format: exp.format, shape: exp.shape, dates: exp.dates, fade: exp.fade, hold: exp.hold })); } catch (e) {}
+  try { localStorage.setItem('aligno_export', JSON.stringify({ fps: exp.fps, format: exp.format, shape: exp.shape, dates: exp.dates, fade: exp.fade, hold: exp.hold, stab: exp.stab })); } catch (e) {}
 }
 const VIDEO_TYPES = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
 function videoType() {
@@ -2202,10 +2458,13 @@ async function openExport() {
   }
   $('fps').value = exp.fps; $('fpsv').textContent = exp.fps + ' fps';
   $('expDates').checked = exp.dates; $('expFade').checked = exp.fade; $('expHold').checked = exp.hold;
+  $('expStab').checked = exp.stab;
+  setStabInfo(stab.T && stab.key === exp.photos.map(p => p.id).join(',') ? stabNote() : STAB_IDLE);
   syncExportUi();
   show('export');
   exp.thumbs = await Promise.all(exp.photos.map(ph => loadImage(urlFor(ph, 'thumb')).catch(() => null)));
   startExportPreview();
+  syncStab();
 }
 function syncExportUi() {
   $('expFormat').querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.getAttribute('data-v') === exp.format));
@@ -2213,6 +2472,23 @@ function syncExportUi() {
   const btn = $('makeGifBtn');
   btn.disabled = exp.photos.length < 2 || exp.busy;
   if (!exp.busy) btn.textContent = exp.format === 'video' ? 'Make video' : 'Make GIF';
+}
+// The preview draws thumbnails; with Stabilize on, each one is lined up
+// once into a canvas of the preview size.
+function previewFrames(W, H) {
+  if (!stabActive()) return exp.thumbs;
+  const key = stab.key + '|' + W + 'x' + H;
+  if (stab.framesKey === key) return stab.frames;
+  const z = stabZoom(W, H);
+  stab.frames = exp.thumbs.map((im, i) => {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = smooth(c.getContext('2d'));
+    x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+    if (im) drawStab(x, im, W, H, stabTransform(i), z);
+    return c;
+  });
+  stab.framesKey = key;
+  return stab.frames;
 }
 function stopExportPreview() { cancelAnimationFrame(exp.raf); exp.raf = 0; }
 function startExportPreview() {
@@ -2222,13 +2498,14 @@ function startExportPreview() {
   const { W, H } = expSize(560);
   cv.width = W; cv.height = H;
   const ctx = smooth(cv.getContext('2d'));
+  const frames = previewFrames(W, H);
   exp.t0 = performance.now();
   const step = () => {
     const { total } = expTimeline();
     const sec = ((performance.now() - exp.t0) / 1000) % total;
     const f = frameAt(sec);
     const A = exp.photos[f.i], B = exp.photos[f.i + 1];
-    drawFrame(ctx, W, H, exp.thumbs[f.i], exp.thumbs[f.i + 1], f.t, A && A.ts, B && B.ts);
+    drawFrame(ctx, W, H, frames[f.i], frames[f.i + 1], f.t, A && A.ts, B && B.ts);
     exp.raf = requestAnimationFrame(step);
   };
   step();
@@ -2258,7 +2535,8 @@ async function prepFrames(W, H, onStep) {
   for (let i = 0; i < exp.photos.length; i++) {
     const im = await loadImage(urlFor(exp.photos[i], 'full'));
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-    drawCover(ctx, downscaled(im, W, H), W, H);
+    if (stabActive()) { const z = stabZoom(W, H); drawStab(ctx, downscaled(im, W * z, H * z), W, H, stabTransform(i), z); }
+    else drawCover(ctx, downscaled(im, W, H), W, H);
     out.push(await toBlobP(c, 'image/jpeg', 0.95));
     if (onStep) onStep(i + 1, exp.photos.length);
   }
@@ -2440,6 +2718,7 @@ async function makeExport() {
   btn.disabled = true;
   const setStatus = (s) => { btn.textContent = s; };
   setStatus('Working…');
+  if (exp.stab) { setStatus('Lining up photos…'); await computeStab(); setStabInfo(stabNote()); }
   res.innerHTML = '';
   try {
     const out = exp.format === 'video' ? await makeVideo(setStatus) : await makeGifBlob(setStatus);
@@ -3106,6 +3385,7 @@ function wire() {
   $('shot').addEventListener('click', shutterPressed);
   $('timerBtn').addEventListener('click', cycleTimer);
   $('flashBtn').addEventListener('click', cycleFlash);
+  $('guide').addEventListener('click', () => { guide.off = true; showGuide(null); camBadge('Tips hidden until you open the camera again'); });
   $('op').addEventListener('input', function () {
     $('opv').textContent = Math.round(this.value) + '%';
     if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
@@ -3131,6 +3411,7 @@ function wire() {
   });
   segPick('expFormat', 'format');
   segPick('expShape', 'shape');
+  $('expStab').addEventListener('change', function () { exp.stab = this.checked; saveExportPrefs(); $('gifResult').innerHTML = ''; syncStab(); });
   [['expDates', 'dates'], ['expFade', 'fade'], ['expHold', 'hold']].forEach(([id, key]) => {
     $(id).addEventListener('change', function () { exp[key] = this.checked; saveExportPrefs(); startExportPreview(); });
   });

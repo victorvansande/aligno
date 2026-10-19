@@ -9,6 +9,7 @@ Progress camera PWA: take the same photo over time, lined up with a ghost overla
 - `app.js`: all logic. Data lives in IndexedDB (`projects` and `photos` stores, photos as Blobs plus a thumbnail).
 - `sw.js`: service worker (cache-first app shell, share target, periodic reminder check).
 - `gifenc.js`: vendored GIF encoder (gifenc 1.0.3), loaded with `import('./gifenc.js')`.
+- `align-worker.js`: Web Worker that measures shift, turn and scale between two pictures (Stabilize in Export, live guide in the camera). See DESIGN.md §18; test with `tools/align-test.js`.
 - `icons/src/`: icon sources and `export.ps1`, which writes every icon size (see DESIGN.md §17).
 - `manifest.webmanifest`, `icons/`, `.nojekyll` (keeps Pages from running Jekyll).
 
