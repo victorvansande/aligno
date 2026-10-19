@@ -32,7 +32,7 @@ Alle waarden bestaan als CSS-variabelen (tokens) bovenaan `index.html`. In de CS
 | `--danger-text` | #C6392F | #FF7A70 | Rode tekst en iconen |
 | `--warn-bg` / `--warn-text` / `--warn-strong` | geel | geel | Alleen "Due"-meldingen |
 
-**Altijd donkere vlakken** (camera, uitlijner, fotoviewer, vergelijken) gebruiken `--ink` (#0B0B10) als basis, wit (`--on-dark`) en `--on-dark-2` (#EDEDF2) als tekst, en `--glass-dark` voor knoppen. Daar wisselt het thema niet mee: foto's beoordeel je altijd op zwart.
+**Altijd donkere vlakken** (camera, uitlijner, fotoviewer, vergelijken) gebruiken `--ink` (#0B0B10) als basis, wit (`--on-dark`) en `--on-dark-2` (#EDEDF2) als tekst, en `--glass-dark` voor knoppen. Het accent op zwart is `--accent-on-dark` (#AEB0FF): voor de actieve modus, de actieve zoomstap en ingeschakelde tools. Daar wisselt het thema niet mee: foto's beoordeel je altijd op zwart.
 
 Regels:
 - Eén primaire (indigo) knop per scherm. Andere acties zijn ghost-knoppen of rijen.
@@ -162,6 +162,10 @@ Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties
 | Lege staat | `.empty` | Icoon of illustratie, titel `--fs-headline`, uitleg `--fs-sub`, eventueel één ghost-knop |
 | Toast | `.toast` | Pil, `--pill-bg`, onderaan, verdwijnt na 2,6 s |
 | Badge "Due" | `.duechip` | Pil, `--fs-micro`, gele tokens |
+| Zoomstappen | `.zoom-stops` | Glazen pil onderaan in de zoeker, knoppen 36px, actieve stap in `--accent-on-dark` (zie §14) |
+| Modustabs | `.mode-tabs` | Tekstknoppen `--fs-body` 600, actief = `--accent-on-dark` op een lichte pil |
+| Tip | `.hint` | Glazen vlak met tekst `--fs-sub` en een ×, een tik sluit hem voorgoed (zie §16) |
+| Feedback | `.cbadge` | Donkere glazen pil bovenaan de zoeker, verdwijnt na 2,4 s |
 
 Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan een component toe aan deze tabel.
 
@@ -213,3 +217,33 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 2. `python3 tools/check.py` (en `node tools/smoke.cjs` als Playwright er is).
 3. Bekijk het op 375px breed, in licht én donker thema.
 4. Versie verhogen in `app.js` en `sw.js` (zie CLAUDE.md), committen, pushen.
+
+## 14. Camera en zoeker
+
+- **Opbouw, van boven naar onder**: zwarte balk met sluiten (links), projectnaam (midden) en maximaal drie tools als losse iconen (raster, zelfontspanner, galerij). Dan de **zoeker in 3:4**, zo groot als past. Daaronder: de schuifregelaar voor de overlay, de modustabs (Fade, Edges, Blend), één regel uitleg, en de bedieningsrij (laatste foto links, sluiter in het midden, camera wisselen rechts).
+- **Wat je ziet is wat je bewaart.** De foto wordt exact zo bijgesneden als de zoeker hem toont (3:4, plus eventuele digitale zoom). Raster, waterpas en overlay liggen in de zoeker, niet over de knoppen.
+- **Zoom gaat met vaste stappen**: 0.5×, 1×, 2×, 3×, 5×, 10×, voor zover het toestel ze kan. Geen schuifregelaar. Knijpen in de zoeker mag voor tussenwaarden; dicht bij een stap klikt de zoom erop vast (binnen 4%). De actieve stap toont de exacte waarde (bv. 2.4×).
+- **Herhaalbaarheid gaat voor alles**: elke foto bewaart zijn zoom, de camera opent op de zoom van de vorige foto, en zodra je daarvan afwijkt verschijnt een knop met die waarde om met één tik terug te keren.
+- **0.5× (ultragroothoek)**: als het toestel tot 0.5 kan zoomen, gewoon als stap. Heeft het een aparte ultragroothoeklens (iPhone: "Back Ultra Wide Camera"), dan wisselt de app van lens onder 0.75×. Geen van beide: geen 0.5-stap, nooit een nep-0.5.
+- Geen optische zoom beschikbaar: dezelfde stappen als digitale uitsnede, in de zoeker én de bewaarde foto.
+- Toolstatus (raster aan, timer 3 s) zie je aan het icoon in `--accent-on-dark` en een korte feedbackpil, niet aan extra tekstlabels.
+
+## 15. Illustraties
+
+- Alle voorbeeldtekeningen komen uit dezelfde set functies in `app.js` (`plantIll`, `buildIll`, `personIll`, `moonIll`) en volgen één stijl.
+- **Raster 40×40**, platte vormen, geen omlijningen behalve dunne details (≤ 1px), geen verlopen met id's (die botsen als dezelfde tekening twee keer op een pagina staat).
+- **Elk onderwerp heeft één pastelachtergrond** (plant groen #EAF3EC, gebouw lucht #E4EEF9, kind roze #FBF0F3, maan nacht #1D2447) en een grond- of tafelstrook onderaan met een zachte schaduw onder het onderwerp.
+- **Licht van linksboven**: de linkerkant van een vorm is iets lichter, de rechterkant iets donkerder.
+- **Het onderwerp staat in elk frame op exact dezelfde plek.** Alleen de verandering beweegt (de plant groeit, het huis wordt gebouwd, de maan neemt toe). Zo leggen de tekeningen meteen uit wat Aligno doet.
+- Een reeks is altijd drie frames met een `›` ertussen.
+- Een nieuw voorbeeld: nieuwe functie in dezelfde stijl, toevoegen aan `EXAMPLES`, en dit lijstje kleuren aanvullen.
+
+## 16. Tips, meldingen en pop-ups
+
+- **Nooit vanzelf een sheet of venster openen**, behalve een bevestiging die de gebruiker zelf uitlokte (verwijderen, herstellen). Uitleg staat in Instellingen ("How aligning works") en op de startpagina.
+- **Maximaal één tip tegelijk**, en nooit over knoppen of over het midden van de zoeker. Tips staan bovenaan (uitlijner) of onderaan in de zoeker boven de zoomstappen (camera).
+- **Een tip verdwijnt met één tik en komt daarna nooit meer terug** (onthouden in `localStorage`, sleutel `aligno_hint_*`).
+- De uitlegregel onder de modustabs verschijnt bij de eerste drie bezoeken en bij elke moduswissel, en vervaagt na 4 seconden.
+- **Feedback na een actie** (foto bewaard, zoom hersteld, raster aan) is een korte pil die na 2,4 s verdwijnt. Geen knop, geen tekst van meer dan één zin.
+- **Toasts** onderaan voor resultaten buiten de camera (back-up klaar, datum aangepast). Fouten zeggen wat er misging en wat je kan doen.
+- Twijfel je of iets een melding verdient? Dan niet. Liever één scherm minder dan één onderbreking meer.

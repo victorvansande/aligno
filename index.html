@@ -28,7 +28,7 @@
     --glass-dark:rgba(28,30,33,.42); --glass-light:rgba(255,255,255,.88);
     --scrim:rgba(11,11,16,.44); --press:rgba(0,0,0,.06); --glow:var(--accent-soft);
     --pill-bg:#0B0B10; --pill-fg:#FFFFFF;
-    --level:#FFD43B; --level-ok:#49E08A;
+    --level:#FFD43B; --level-ok:#49E08A; --accent-on-dark:#AEB0FF;
 
     --fs-display:30px; --fs-title:20px; --fs-headline:17px; --fs-control:16px;
     --fs-body:15px; --fs-sub:13px; --fs-label:12px; --fs-micro:11px;
@@ -129,7 +129,7 @@
     font-size:var(--fs-label); font-weight:600; }
   .pswipe.sw .pdel{ visibility:visible; }
 
-  .panel, .hero, .set-card, .ld-demo{ background:var(--surface-2); border-radius:var(--r-lg); padding:var(--s-4); }
+  .panel, .hero, .ld-demo{ background:var(--surface-2); border-radius:var(--r-lg); padding:var(--s-4); }
 
   .set-row, .optrow{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-row); padding:var(--s-3) var(--s-4);
     margin-bottom:var(--s-3); cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
@@ -195,9 +195,6 @@
   /* Chips, badges, toast, tips, empty states */
   .duechip{ display:inline-flex; align-items:center; margin-left:var(--s-2); padding:2px var(--s-2); vertical-align:1px;
     border-radius:var(--r-pill); background:var(--warn-bg); color:var(--warn-strong); font-size:var(--fs-micro); font-weight:600; }
-  .tip{ display:flex; gap:var(--s-2); align-items:flex-start; margin-top:var(--s-3); padding:var(--s-3);
-    border-radius:var(--r-md); background:var(--accent-soft); color:var(--accent-strong); font-size:var(--fs-sub); }
-  .tip svg{ flex:none; margin-top:2px; }
   .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); z-index:90; max-width:calc(100% - 2 * var(--gutter));
     padding:var(--s-3) var(--s-5); border-radius:var(--r-pill); background:var(--pill-bg); color:var(--pill-fg); box-shadow:var(--sh-2);
     font-size:var(--fs-sub); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -219,8 +216,8 @@
   .empty-strip .ex-ar{ font-size:var(--fs-title); margin:0 var(--s-2); }
 
   /* Illustrated example strips (new project sheet, landing, empty home) */
-  .examples{ display:flex; flex-direction:column; gap:var(--s-2); margin-bottom:var(--s-3); }
-  .ex{ display:flex; align-items:center; gap:var(--s-3); width:100%; min-height:var(--h-row); padding:var(--s-2) var(--s-3); text-align:left; cursor:pointer;
+  .examples{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s-2); margin-bottom:var(--s-3); }
+  .ex{ display:flex; flex-direction:column; align-items:flex-start; gap:var(--s-2); width:100%; min-width:0; padding:var(--s-3); text-align:left; cursor:pointer;
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
     transition:transform var(--t-fast) var(--ease), border-color var(--t-base), background var(--t-base); }
   .ex:active{ transform:scale(.98); }
@@ -247,12 +244,12 @@
   .ld-demo-strip .ex-fr{ width:64px; height:64px; border-radius:var(--r-sm); box-shadow:0 2px 8px rgba(10,10,20,.08); }
   .ld-demo-strip .ex-ar{ font-size:var(--fs-control); margin:0 var(--s-2); }
   .ld-demo-cap{ font-size:var(--fs-sub); color:var(--text-2); }
-  .ld-steps, .set-card{ display:flex; flex-direction:column; gap:var(--s-4); }
-  .ld-step, .set-step{ display:flex; gap:var(--s-3); align-items:flex-start; }
-  .ld-step .num, .set-step .num{ width:28px; height:28px; flex:none; border-radius:50%; background:var(--accent); color:#fff;
+  .ld-steps{ display:flex; flex-direction:column; gap:var(--s-4); }
+  .ld-step{ display:flex; gap:var(--s-3); align-items:flex-start; }
+  .ld-step .num{ width:28px; height:28px; flex:none; border-radius:50%; background:var(--accent); color:#fff;
     font-size:var(--fs-sub); font-weight:600; display:flex; align-items:center; justify-content:center; }
-  .ld-step b, .set-step b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
-  .ld-step span, .set-step span{ font-size:var(--fs-sub); color:var(--text-2); line-height:var(--lh-snug); }
+  .ld-step b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
+  .ld-step span{ font-size:var(--fs-sub); color:var(--text-2); line-height:var(--lh-snug); }
   .ld-trust{ display:flex; gap:var(--s-3); margin-top:var(--s-6); }
   .tchip{ flex:1; min-width:0; text-align:center; padding:var(--s-4) var(--s-3);
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--sh-1); }
@@ -352,7 +349,7 @@
   #overlay{ position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; }
   #overlay.edges{ filter:drop-shadow(0 0 .6px rgba(0,0,0,.85)); }
   #overlay.diff{ mix-blend-mode:difference; filter:none; }
-  .cam.mirror #video, .cam.mirror #overlay{ transform:scaleX(-1); }
+  .cam.mirror #overlay{ transform:scaleX(-1); }
   #flash{ position:absolute; inset:0; z-index:6; background:#fff; opacity:0; pointer-events:none; }
   .gridlines{ position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition:opacity var(--t-base); }
   .gridlines.on{ opacity:1; }
@@ -374,16 +371,12 @@
   .countdown{ position:absolute; inset:0; z-index:7; display:none; align-items:center; justify-content:center; pointer-events:none;
     font-size:120px; font-weight:700; text-shadow:0 4px 30px rgba(0,0,0,.45); }
   .countdown.on{ display:flex; }
-  .cbadge{ position:absolute; top:calc(env(safe-area-inset-top) + 68px); left:50%; z-index:5; transform:translateX(-50%);
-    padding:var(--s-2) var(--s-4); border-radius:var(--r-pill); background:rgba(var(--accent-rgb),.92); box-shadow:var(--sh-2);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); font-size:var(--fs-label); font-weight:500; white-space:nowrap; }
-  .libchip{ position:absolute; top:calc(env(safe-area-inset-top) + 64px); left:50%; z-index:5; transform:translateX(-50%);
-    display:flex; align-items:center; gap:var(--s-2); padding:var(--s-1) var(--s-1) var(--s-1) var(--s-3); border-radius:var(--r-pill);
-    font-size:var(--fs-label); font-weight:500; white-space:nowrap; }
+  .cbadge{ max-width:calc(100% - 2 * var(--s-4)); padding:var(--s-2) var(--s-4); border-radius:var(--r-pill); background:var(--glass-dark); box-shadow:var(--sh-2);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); font-size:var(--fs-sub); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .libchip{ display:flex; align-items:center; gap:var(--s-2); padding:var(--s-1) var(--s-1) var(--s-1) var(--s-4); border-radius:var(--r-pill);
+    background:var(--glass-dark); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); font-size:var(--fs-sub); font-weight:500; white-space:nowrap; }
   .libchip button{ min-height:32px; padding:0 var(--s-3); border:none; border-radius:var(--r-pill); cursor:pointer;
     background:rgba(255,255,255,.16); color:var(--on-dark); font-size:var(--fs-label); font-weight:600; }
-  .camhint{ position:absolute; left:var(--s-5); right:var(--s-5); bottom:180px; z-index:4; padding:var(--s-3) var(--s-4); border-radius:var(--r-md);
-    text-align:center; font-size:var(--fs-sub); }
   .cam-panel{ position:absolute; left:0; right:0; bottom:0; z-index:5; padding:var(--s-4) var(--s-5) calc(env(safe-area-inset-bottom) + var(--s-5));
     background:linear-gradient(transparent, rgba(0,0,0,.55) 42%); }
   .cam-seg{ display:flex; gap:var(--s-1); padding:var(--s-1); min-height:var(--h-seg); margin-bottom:var(--s-3); border-radius:var(--r-md); }
@@ -391,7 +384,6 @@
     color:var(--on-dark-2); font-size:var(--fs-sub); font-weight:500; display:flex; align-items:center; justify-content:center; gap:6px;
     transition:background var(--t-base); }
   .cam-seg button.on{ background:rgba(var(--accent-rgb),.92); color:#fff; }
-  .cam-seg .seg-help{ flex:none; width:40px; font-size:var(--fs-body); font-weight:700; }
   .cam-slwrap{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-seg); margin-bottom:var(--s-4); padding:0 var(--s-4); border-radius:var(--r-md); }
   .cam-slwrap .lbl{ display:flex; align-items:center; gap:6px; white-space:nowrap; color:var(--on-dark-2); font-size:var(--fs-sub); }
   .cam-slwrap .val{ min-width:40px; text-align:right; font-size:var(--fs-sub); font-weight:600; }
@@ -418,6 +410,45 @@
   .camerr strong{ font-size:var(--fs-title); font-weight:600; }
   .camerr p{ max-width:320px; margin:var(--s-3) 0 var(--s-6); font-size:var(--fs-sub); color:var(--on-dark-3); }
 
+  /* Camera screen: top bar, 3:4 viewfinder, controls below it (DESIGN.md §14) */
+  .cam.camera.active{ display:flex; flex-direction:column; }
+  .camera .cam-top{ position:relative; }
+  .ciconbtn:not(.glass){ background:none; }
+  .camera .cam-top .ciconbtn.act{ color:var(--accent-on-dark); }
+  .vf-wrap{ flex:1; min-height:0; container-type:size; display:flex; align-items:center; justify-content:center; }
+  .vf{ position:relative; overflow:hidden; width:min(100cqw, 75cqh); height:min(133.333cqw, 100cqh); background:#000; touch-action:none; }
+  .vf-top, .vf-bottom, .float-top{ position:absolute; left:0; right:0; z-index:5; display:flex; flex-direction:column; align-items:center; gap:var(--s-2); pointer-events:none; }
+  .vf-top > *, .vf-bottom > *, .float-top > *{ pointer-events:auto; }
+  .vf-top{ top:var(--s-3); }
+  .vf-bottom{ bottom:var(--s-3); }
+  .float-top{ top:calc(env(safe-area-inset-top) + 68px); }
+  .hint{ display:flex; align-items:center; gap:var(--s-3); max-width:calc(100% - 2 * var(--s-4)); padding:var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+    border:none; border-radius:var(--r-md); cursor:pointer; text-align:left; color:var(--on-dark); background:var(--glass-dark);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); font-size:var(--fs-sub); line-height:var(--lh-snug); }
+  .hint i{ flex:none; font-style:normal; font-size:var(--fs-title); line-height:1; opacity:.6; }
+  .zoom-stops{ display:flex; align-items:center; gap:var(--s-1); padding:var(--s-1); border-radius:var(--r-pill); background:var(--glass-dark);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  .zoom-stops button{ min-width:36px; height:36px; padding:0 var(--s-2); border:none; border-radius:var(--r-pill); cursor:pointer;
+    background:rgba(0,0,0,.3); color:var(--on-dark); font-size:var(--fs-micro); font-weight:600; transition:color var(--t-base), transform var(--t-fast) var(--ease); }
+  .zoom-stops button:active{ transform:scale(.92); }
+  .zoom-stops button.on{ color:var(--accent-on-dark); font-size:var(--fs-label); font-weight:700; }
+  .zoom-stops .match{ display:flex; align-items:center; gap:var(--s-1); background:rgba(var(--accent-rgb),.85); color:#fff; }
+  .cam-bottom{ flex:none; display:flex; flex-direction:column; gap:var(--s-2); padding:var(--s-2) var(--gutter) calc(env(safe-area-inset-bottom) + var(--s-4)); }
+  .cam-slider{ display:flex; align-items:center; gap:var(--s-3); min-height:36px; padding:0 var(--s-2); color:var(--on-dark-2); }
+  .cam-slider svg{ flex:none; }
+  .cam-slider input[type=range]{ background:rgba(255,255,255,.25); }
+  .cam-slider input[type=range]::-webkit-slider-thumb{ width:22px; height:22px; border:none; background:#fff; }
+  .cam-slider .val{ min-width:40px; text-align:right; font-size:var(--fs-sub); font-weight:600; }
+  .mode-tabs{ display:flex; justify-content:center; gap:var(--s-1); }
+  .mode-tabs button{ min-height:36px; padding:0 var(--s-4); border:none; border-radius:var(--r-pill); cursor:pointer; background:none;
+    color:var(--on-dark-3); font-size:var(--fs-body); font-weight:600; transition:color var(--t-base), background var(--t-base); }
+  .mode-tabs button.on{ color:var(--accent-on-dark); background:rgba(255,255,255,.08); }
+  .mode-hint{ min-height:16px; text-align:center; font-size:var(--fs-label); line-height:1.3; color:var(--on-dark-3); transition:opacity var(--t-base); }
+  .mode-hint.off{ opacity:0; }
+  .camera .cam-controls{ padding-top:var(--s-1); }
+  .flipbtn{ width:48px; height:48px; }
+  .cam-side .cthumb{ width:48px; height:48px; }
+
   /* Aligner */
   .al-viewport{ position:absolute; inset:0; overflow:hidden; touch-action:none; background:#0b0c0e; }
   .al-img{ position:absolute; top:50%; left:50%; z-index:1; max-width:none; transform-origin:center center; cursor:grab; }
@@ -431,8 +462,7 @@
   .al-tool{ min-height:40px; padding:0 var(--s-4); border:none; border-radius:var(--r-pill); cursor:pointer; color:var(--on-dark);
     display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-sub); font-weight:600; transition:transform var(--t-fast) var(--ease); }
   .al-tool:active{ transform:scale(.94); }
-  .al-rot{ position:absolute; top:calc(env(safe-area-inset-top) + 112px); left:50%; z-index:5; transform:translateX(-50%);
-    padding:var(--s-1) var(--s-3); border-radius:var(--r-pill); background:rgba(0,0,0,.45); font-size:var(--fs-label); font-weight:600; }
+  .al-rot{ padding:var(--s-1) var(--s-3); border-radius:var(--r-pill); background:rgba(0,0,0,.45); font-size:var(--fs-label); font-weight:600; }
 
   /* Photo viewer */
   .photoview{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:#060809; color:var(--on-dark); }
@@ -489,7 +519,7 @@
   @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes sheetUp{ from{ transform:translateY(100%); } to{ transform:none; } }
   @keyframes listIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
-  @keyframes badgePop{ from{ opacity:0; transform:translateX(-50%) translateY(-6px) scale(.92); } to{ opacity:1; transform:translateX(-50%) scale(1); } }
+  @keyframes badgePop{ from{ opacity:0; transform:translateY(-6px) scale(.92); } to{ opacity:1; transform:none; } }
   @keyframes logoPop{ from{ opacity:0; transform:scale(.82); } to{ opacity:1; transform:none; } }
   @keyframes cdPop{ 0%{ opacity:0; transform:scale(1.5); } 20%{ opacity:1; transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(.9); } }
   .screen.active{ animation:screenIn var(--t-slow) var(--ease); }
@@ -556,7 +586,7 @@
       <div class="ld-steps">
         <div class="ld-step"><span class="num">1</span><div><b>Start a project</b><span>Give it a name and take your first photo.</span></div></div>
         <div class="ld-step"><span class="num">2</span><div><b>Line it up next time</b><span>Your last shot appears as a ghost overlay on the live camera. Match it, then tap the shutter.</span></div></div>
-        <div class="ld-step"><span class="num">3</span><div><b>Watch it happen</b><span>Slide between before and after, or turn the whole series into a smooth, aligned GIF.</span></div></div>
+        <div class="ld-step"><span class="num">3</span><div><b>Watch it happen</b><span>Slide between before and after, or turn the whole series into a GIF or video.</span></div></div>
       </div>
 
       <div class="ld-trust">
@@ -685,12 +715,6 @@
       <span class="ttl">Settings</span>
     </div>
     <div class="content">
-      <p class="sectlbl">How it works</p>
-      <div class="set-card">
-        <div class="set-step"><span class="num">1</span><div><b>Create a project</b><span>One subject you want to track over time.</span></div></div>
-        <div class="set-step"><span class="num">2</span><div><b>Overlay &amp; align</b><span>Line up the live view with your previous photo.</span></div></div>
-        <div class="set-step"><span class="num">3</span><div><b>Compare &amp; share</b><span>Slide between before and after, or turn the series into a GIF.</span></div></div>
-      </div>
       <p class="sectlbl">Appearance</p>
       <div class="seg" id="themeSeg">
         <button data-theme-opt="system">Auto</button>
@@ -711,6 +735,11 @@
       </div>
       <input type="file" id="restoreInput" accept=".zip,application/zip" hidden>
       <p class="sectlbl">More</p>
+      <div class="set-row" id="helpRow">
+        <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></span>
+        <span class="rt">How aligning works</span>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
       <div class="set-row" id="introRow">
         <span class="ri"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
         <span class="rt">Show intro again</span>
@@ -725,59 +754,62 @@
     </div>
   </section>
 
-  <div class="cam" id="screen-camera">
-    <video id="video" playsinline autoplay muted></video>
-    <img id="overlay" alt="">
-    <div class="gridlines" id="gridlines"></div>
-    <div class="level" id="level" aria-hidden="true"><i class="lv-l"></i><i class="lv-line" id="lvLine"></i><i class="lv-r"></i><span class="lv-deg" id="lvDeg"></span></div>
-    <div class="countdown" id="countdown"></div>
-    <div id="flash"></div>
+  <div class="cam camera" id="screen-camera">
     <div class="cam-top">
-      <button class="ciconbtn glass" id="camClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      <button class="ciconbtn" id="camClose" aria-label="Close camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <span class="nm" id="camProjName">Align</span>
       <span class="cam-actions">
-        <button class="ciconbtn glass" id="timerBtn" aria-label="Self-timer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></svg><b class="tmr" id="timerLbl"></b></button>
-        <button class="ciconbtn glass" id="libBtn" aria-label="Use a photo from your library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></button>
-        <button class="ciconbtn glass" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
+        <button class="ciconbtn" id="gridBtn" aria-label="Grid and level: off"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button>
+        <button class="ciconbtn" id="timerBtn" aria-label="Self-timer: off"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></svg><b class="tmr" id="timerLbl"></b></button>
+        <button class="ciconbtn" id="libBtn" aria-label="Line up against a photo from your gallery"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></button>
       </span>
     </div>
-    <div class="cbadge" id="cbadge" hidden></div>
-    <div class="libchip glass" id="libChip" hidden>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span>Photo from library</span>
-      <button id="libReset">Use last photo</button>
-    </div>
-    <div class="camhint glass" id="camhint" hidden>Take your first photo from a spot you can return to. Next time, the overlay helps you line it up.</div>
-    <div class="cam-panel">
-      <div class="cam-seg glass" id="modeSeg" hidden>
-        <button data-om="photo" class="on" id="omPhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Fade</button>
-        <button data-om="edges" id="omEdges"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges</button>
-        <button data-om="diff" id="omDiff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>Blend</button>
-        <button class="seg-help" id="camHelpBtn" aria-label="How aligning works">?</button>
+
+    <div class="vf-wrap">
+      <div class="vf" id="vf">
+        <video id="video" playsinline autoplay muted></video>
+        <img id="overlay" alt="">
+        <div class="gridlines" id="gridlines"></div>
+        <div class="level" id="level" aria-hidden="true"><i class="lv-l"></i><i class="lv-line" id="lvLine"></i><i class="lv-r"></i><span class="lv-deg" id="lvDeg"></span></div>
+        <div id="flash"></div>
+        <div class="countdown" id="countdown"></div>
+        <div class="vf-top">
+          <div class="cbadge" id="cbadge" hidden></div>
+          <div class="libchip" id="libChip" hidden>
+            <span>Gallery photo</span>
+            <button id="libReset">Use last photo</button>
+          </div>
+        </div>
+        <div class="vf-bottom">
+          <button class="hint" id="camhint" hidden>Take the first photo from a spot you can come back to.<i aria-hidden="true">×</i></button>
+          <div class="zoom-stops" id="zoomStops" hidden></div>
+        </div>
       </div>
-      <div class="cam-slwrap glass" id="opRow" hidden>
-        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg>Overlay</span>
-        <input type="range" id="op" min="0" max="100" value="50">
+    </div>
+
+    <div class="cam-bottom">
+      <div class="cam-slider" id="opRow" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3" fill="currentColor" fill-opacity=".35"/></svg>
+        <input type="range" id="op" min="0" max="100" value="50" aria-label="Overlay strength">
         <span class="val" id="opv">50%</span>
       </div>
-      <div class="cam-slwrap glass" id="zoomRow" hidden>
-        <span class="lbl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>Zoom</span>
-        <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
-        <span class="val" id="zoomv">1.0×</span>
+      <div class="mode-tabs" id="modeSeg" role="tablist" hidden>
+        <button data-om="photo" id="omPhoto" role="tab">Fade</button>
+        <button data-om="edges" id="omEdges" role="tab">Edges</button>
+        <button data-om="diff" id="omDiff" role="tab">Blend</button>
       </div>
+      <p class="mode-hint" id="modeHint" aria-live="polite"></p>
       <div class="cam-controls">
-        <div class="cam-side">
-          <button class="cpill glass" id="gridBtn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
-            <span id="gridLbl">Grid</span>
-          </button>
-        </div>
-        <button class="shutter" id="shot" aria-label="Take photo"><i></i></button>
         <div class="cam-side">
           <img id="camLastThumb" class="cthumb" hidden alt="Open the project">
         </div>
+        <button class="shutter" id="shot" aria-label="Take photo"><i></i></button>
+        <div class="cam-side">
+          <button class="ciconbtn glass flipbtn" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
+        </div>
       </div>
     </div>
+
     <div class="camerr" id="camerr">
       <strong>Camera unavailable</strong>
       <p id="camerrMsg"></p>
@@ -801,9 +833,11 @@
       <button class="ciconbtn glass" id="alGhostToggle" aria-label="Toggle guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></button>
       </span>
     </div>
-    <div class="al-rot" id="alRotLbl" hidden></div>
-    <div class="cbadge" id="alBadge" hidden></div>
-    <div class="camhint glass" id="alHint" hidden>Drag the photo so your subject sits under the crosshair. Pinch to zoom, twist with two fingers to rotate. Or tap Auto-center for the moon and other bright subjects.</div>
+    <div class="float-top">
+      <div class="al-rot" id="alRotLbl" hidden></div>
+      <div class="cbadge" id="alBadge" hidden></div>
+      <button class="hint" id="alHint" hidden>Drag your subject under the crosshair. Pinch to zoom, twist to rotate, or tap Auto-center.<i aria-hidden="true">×</i></button>
+    </div>
     <div class="cam-panel">
       <div class="al-tools">
         <button class="al-tool glass" id="alAuto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Auto-center</button>
@@ -837,10 +871,6 @@
     <p class="sheet-sub">Track anything that changes over time. Tap an idea, or name your own.</p>
     <div class="examples" id="exampleList"></div>
     <input class="field" id="projName" placeholder="e.g. Living room plant" autocomplete="off">
-    <div class="tip">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
-      <span>Take each photo from the same spot. The overlay lines the new shot up with the last one.</span>
-    </div>
     <div class="sheet-actions">
       <button class="btn ghost flex" id="newCancel">Cancel</button>
       <button class="btn primary flex" id="newCreate">Create</button>
@@ -849,7 +879,7 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.8"/><path d="M21 15.5l-5.5-5.5L5 21"/></svg>
       Import &amp; align existing photos
     </button>
-    <p class="import-hint">Already have photos, like a folder of moon shots? Import them and center your subject in each one.</p>
+    <p class="import-hint">Already have photos, like a folder of moon shots? Import them and line up each one.</p>
   </div>
 </div>
 
@@ -933,12 +963,13 @@
     <div class="grab"></div>
     <h3>Lining up your shot</h3>
     <div class="help-list">
-      <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></span><div><b>Fade</b><span>Your last photo sits see-through on the live view. Use the Overlay slider to make it stronger or fainter.</span></div></div>
+      <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/></svg></span><div><b>Fade</b><span>Your last photo sits see-through on the live view. The slider above the modes makes it stronger or fainter.</span></div></div>
       <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg></span><div><b>Edges</b><span>Only the outlines of your last photo, in pink. Easiest when the scene itself changed a lot.</span></div></div>
       <div class="help-row"><span class="hi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></span><div><b>Blend</b><span>Shows the difference. The darker the screen, the better you’re lined up. Move until it goes almost black.</span></div></div>
     </div>
     <p class="sectlbl">Handy extras</p>
     <ul class="help-tips">
+      <li><b>Zoom steps</b> (1×, 2×, ...) give the same zoom every time. The camera opens at the zoom of your last photo.</li>
       <li><b>Grid</b> also shows a level, so the phone is straight every time.</li>
       <li><b>Timer</b> (top) gives you 3 or 10 seconds, handy for photos of yourself.</li>
       <li><b>Photo icon</b> (top) lines up against any picture from your gallery instead.</li>

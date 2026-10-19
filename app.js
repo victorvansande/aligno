@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v27';
+const APP_VERSION = 'v28';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -114,29 +114,95 @@ function srcIcon(ph) {
 }
 function srcLabel(ph) { return isImported(ph) ? 'Imported' : 'Taken in app'; }
 
-/* --- Illustrations for examples, the landing demo and empty states. --- */
+/* --- Illustrations for examples, the landing demo and empty states. ---
+   One set, one style (DESIGN.md §15): 40×40, flat shapes, a pastel scene
+   per subject, light from the top left, and the subject anchored at the same
+   spot in every frame, because that is what Aligno is about. */
+const svg40 = (body) => '<svg viewBox="0 0 40 40" aria-hidden="true">' + body + '</svg>';
+const f1 = (n) => n.toFixed(1);
+
 function plantIll(g) {
-  const sh = 6 + g * 22, top = 30 - sh, n = Math.max(1, Math.round(1 + g * 3));
-  let lv = '';
+  const h = 5 + g * 19, top = 29 - h;
+  const n = 1 + Math.round(g * 4);
+  let leaves = '';
   for (let i = 0; i < n; i++) {
-    const t = (i + 1) / (n + 1), ly = 29 - t * sh, s = i % 2 ? -1 : 1;
-    lv += '<ellipse cx="' + (20 + s * 4) + '" cy="' + ly + '" rx="' + (2.6 + g * 2) + '" ry="1.9" fill="#3FA873" transform="rotate(' + (s * 30) + ' ' + (20 + s * 4) + ' ' + ly + ')"/>';
+    const t = (i + 1) / (n + 1), y = 29 - t * h, side = i % 2 ? -1 : 1, s = 0.55 + g * 0.6 * (1 - t * 0.35);
+    leaves += '<path transform="translate(20 ' + f1(y) + ') scale(' + (side * s).toFixed(2) + ' ' + s.toFixed(2) + ') rotate(-24)" d="M0 0c2.6-3.2 7.4-3.8 10-1.2C7.4 1.8 2.8 2.6 0 0z" fill="' + (side > 0 ? '#58B07E' : '#469C6B') + '"/>';
   }
-  return '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#E7F2EA"/><line x1="20" y1="30" x2="20" y2="' + top + '" stroke="#2E7D55" stroke-width="1.6" stroke-linecap="round"/>' + lv + '<path d="M15.5 30h9l-1 5.5h-7z" fill="#C5824F"/></svg>';
+  const bloom = g > 0.8
+    ? '<g transform="translate(20 ' + f1(top) + ')"><circle cx="-1.6" r="1.7" fill="#F49AB4"/><circle cx="1.6" r="1.7" fill="#F49AB4"/><circle cy="-1.6" r="1.7" fill="#F7AEC3"/><circle cy="1.5" r="1.7" fill="#EE86A4"/><circle r="1" fill="#FFD66B"/></g>'
+    : '<circle cx="20" cy="' + f1(top) + '" r="1.1" fill="#6CC08F"/>';
+  return svg40(
+    '<rect width="40" height="40" fill="#EAF3EC"/><rect x="3" y="3" width="13" height="16" rx="2" fill="#F6FBF7"/>' +
+    '<rect y="35.5" width="40" height="4.5" fill="#DCCDB2"/><ellipse cx="20" cy="35.8" rx="7.5" ry="1" fill="#000" opacity=".1"/>' +
+    '<path d="M20 29C19 ' + f1(29 - h * 0.45) + ' 21 ' + f1(29 - h * 0.7) + ' 20 ' + f1(top) + '" stroke="#3E8A5A" stroke-width="1.3" fill="none" stroke-linecap="round"/>' +
+    leaves + bloom +
+    '<path d="M14.6 30h10.8l-1.3 5.7h-8.2z" fill="#C8784C"/><rect x="13.6" y="28" width="12.8" height="2.6" rx="1" fill="#B5653C"/>' +
+    '<path d="M16.3 31l.7 4" stroke="#E2A27A" stroke-width=".9" stroke-linecap="round" opacity=".7"/>'
+  );
 }
+
 function personIll(g) {
-  const hd = 3 + g * 1.4, bh = 9 + g * 13, top = 31 - bh - hd;
-  return '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#FBEDF1"/><circle cx="20" cy="' + (top + hd) + '" r="' + hd + '" fill="#E58AA6"/><rect x="' + (20 - hd) + '" y="' + (top + hd * 2) + '" width="' + (hd * 2) + '" height="' + (31 - (top + hd * 2)) + '" rx="' + hd + '" fill="#E58AA6"/></svg>';
+  const H = 13 + g * 14, feet = 35, head = 3 + g * 0.6, x = 23;
+  const headY = feet - H + head, shoulder = headY + head + 0.6, hip = shoulder + (H - head * 2) * 0.48;
+  const marks = [0.25, 0.6].filter(m => m < g - 0.01)
+    .map(m => '<path d="M8 ' + f1(feet - (13 + m * 14)) + 'h6" stroke="#C9688A" stroke-width=".9" stroke-linecap="round"/>').join('');
+  let ticks = '';
+  for (let y = 9; y < 35; y += 3) ticks += '<path d="M8 ' + y + 'h' + (y % 6 === 0 ? 3 : 1.8) + '" stroke="#E4BFCB" stroke-width=".6"/>';
+  return svg40(
+    '<rect width="40" height="40" fill="#FBF0F3"/><rect x="6" y="4" width="8" height="31" rx="1" fill="#F6E1E7"/>' + ticks + marks +
+    '<path d="M7 ' + f1(feet - H) + 'h22" stroke="#C9688A" stroke-width=".8" stroke-dasharray="1.2 1.2" opacity=".55"/>' +
+    '<rect y="35" width="40" height="5" fill="#EAD8C8"/><ellipse cx="' + x + '" cy="35.2" rx="5" ry=".8" fill="#000" opacity=".1"/>' +
+    '<rect x="' + (x - 2.4) + '" y="' + f1(hip) + '" width="2.1" height="' + f1(feet - hip) + '" rx="1" fill="#55679E"/>' +
+    '<rect x="' + (x + 0.3) + '" y="' + f1(hip) + '" width="2.1" height="' + f1(feet - hip) + '" rx="1" fill="#4A5B8F"/>' +
+    '<rect x="' + (x - 3.4) + '" y="' + f1(shoulder) + '" width="6.8" height="' + f1(hip - shoulder + 1) + '" rx="2.2" fill="#E77FA0"/>' +
+    '<circle cx="' + x + '" cy="' + f1(headY) + '" r="' + f1(head) + '" fill="#F2C6A6"/>' +
+    '<path d="M' + f1(x - head) + ' ' + f1(headY) + 'a' + f1(head) + ' ' + f1(head) + ' 0 0 1 ' + f1(head * 2) + ' 0c-1.6-1-3.2-1.2-' + f1(head * 2) + ' 0z" fill="#5C3F31"/>'
+  );
 }
-const B_LOT = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#EDEFF2"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><path d="M7 29q5-3 9 0M24 29q4-2 8 0" stroke="#B6A886" fill="none" stroke-width="1.1" stroke-linecap="round"/></svg>';
-const B_FND = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#EDEFF2"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><rect x="10" y="22" width="20" height="7.5" fill="none" stroke="#9AA0A6" stroke-width="1.7"/></svg>';
-const B_HSE = '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#E7F0FB"/><rect y="29" width="40" height="11" fill="#D9CBA9"/><rect x="10" y="19" width="20" height="11" fill="#F2EAD9" stroke="#B7996F" stroke-width="1"/><path d="M8 19l12-8 12 8z" fill="#C0573A"/><rect x="17.5" y="23.5" width="5" height="6.5" fill="#8A6A45"/></svg>';
+
+function buildIll(stage) {
+  const sky = '<rect width="40" height="40" fill="#E4EEF9"/><circle cx="32" cy="8.5" r="5" fill="#FFD27A" opacity=".25"/><circle cx="32" cy="8.5" r="3.2" fill="#FFD27A"/>' +
+    '<rect y="30" width="40" height="10" fill="#CFBD95"/><rect y="29.4" width="40" height="1.4" fill="#9EC07E"/>';
+  if (stage === 0) {
+    return svg40(sky + '<path d="M10 30.2h20" stroke="#A9895C" stroke-width=".5" stroke-dasharray="1 1"/>' +
+      '<rect x="9.4" y="26.5" width="1.2" height="4" fill="#9C7A4E"/><rect x="29.4" y="26.5" width="1.2" height="4" fill="#9C7A4E"/>' +
+      '<path d="M10 27h20" stroke="#E8735A" stroke-width=".5"/>' +
+      '<rect x="31.5" y="24" width="5" height="3.5" rx=".5" fill="#F4F0E6"/><rect x="33.6" y="27.5" width=".8" height="3" fill="#9C7A4E"/>');
+  }
+  if (stage === 1) {
+    let posts = '';
+    [10.5, 15.2, 19.9, 24.6, 29.3].forEach(px => { posts += '<rect x="' + px + '" y="19.5" width="1.2" height="9.5" fill="#C99A63"/>'; });
+    return svg40(sky + '<rect x="9" y="28.6" width="22" height="2.2" fill="#B9B6AF"/>' + posts +
+      '<rect x="10" y="19" width="20.6" height="1.3" fill="#B98852"/>' +
+      '<path d="M9.5 19.4L20.3 11.8 31.1 19.4" stroke="#B98852" stroke-width="1.2" fill="none" stroke-linejoin="round"/>' +
+      '<path d="M3 30V9h1.4v21M4.4 9.6h11" stroke="#E2A23B" stroke-width="1.1" fill="none"/><path d="M14 9.6v3.4" stroke="#7A7A80" stroke-width=".5"/>');
+  }
+  return svg40(sky + '<rect x="10" y="19" width="20" height="11" fill="#F4E8D6"/><rect x="10" y="19" width="5" height="11" fill="#EBDDC8"/>' +
+    '<rect x="25.6" y="11.5" width="2.6" height="5" fill="#A9483A"/><path d="M8 19.8L20 11l12 8.8z" fill="#C8573C"/><path d="M20 11l12 8.8h-3.4z" fill="#B24A33"/>' +
+    '<rect x="18" y="23.6" width="4" height="6.4" rx=".6" fill="#8A6643"/>' +
+    '<rect x="12.2" y="21.6" width="3.8" height="3.4" rx=".4" fill="#A9D0EE"/><rect x="24" y="21.6" width="3.8" height="3.4" rx=".4" fill="#A9D0EE"/>' +
+    '<rect x="34.4" y="25" width="1" height="5" fill="#8A6643"/><circle cx="34.9" cy="23.6" r="3" fill="#5FAE6E"/><circle cx="34" cy="22.7" r="1.2" fill="#77C185"/>');
+}
+
+function moonIll(p) {
+  const bg = '#1D2447', off = f1(p * 15.5);
+  return svg40(
+    '<rect width="40" height="40" fill="' + bg + '"/><circle cx="20" cy="17" r="10.5" fill="#F3EBD2" opacity=".07"/>' +
+    '<circle cx="20" cy="17" r="7.5" fill="#F3EBD2"/><circle cx="17.5" cy="15" r="1.4" fill="#E4D9B9"/><circle cx="22.5" cy="19.5" r="1.9" fill="#E4D9B9"/><circle cx="21.6" cy="13.4" r=".9" fill="#E4D9B9"/>' +
+    '<circle cx="' + f1(20 - +off) + '" cy="17" r="7.7" fill="' + bg + '"/>' +
+    '<circle cx="5" cy="6" r=".5" fill="#fff" opacity=".8"/><circle cx="34" cy="5" r=".6" fill="#fff" opacity=".9"/><circle cx="35" cy="20" r=".4" fill="#fff" opacity=".6"/><circle cx="7" cy="24" r=".4" fill="#fff" opacity=".6"/>' +
+    '<path d="M0 34c7-3.5 13-3.5 20-1.5S33 34 40 31v9H0z" fill="#141934"/>'
+  );
+}
 
 const EXAMPLES = [
-  { name: 'Living room plant', label: 'Plant', desc: 'seedling to full bloom', frames: [plantIll(0.18), plantIll(0.55), plantIll(1)] },
-  { name: 'House build', label: 'Building', desc: 'ground to finished home', frames: [B_LOT, B_FND, B_HSE] },
-  { name: 'Growing up', label: 'A child', desc: 'watch them grow', frames: [personIll(0.25), personIll(0.6), personIll(1)] }
+  { name: 'Living room plant', label: 'Plant', desc: 'Seedling to bloom', frames: [plantIll(0.18), plantIll(0.55), plantIll(1)] },
+  { name: 'House build', label: 'Building', desc: 'Plot to home', frames: [buildIll(0), buildIll(1), buildIll(2)] },
+  { name: 'Growing up', label: 'A child', desc: 'Year after year', frames: [personIll(0.25), personIll(0.6), personIll(1)] },
+  { name: 'The moon', label: 'The moon', desc: 'Night after night', frames: [moonIll(0.35), moonIll(0.68), moonIll(1)] }
 ];
+
 function strip(frames) {
   return frames.map((f, j) => (j ? '<span class="ex-ar">›</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
 }
@@ -562,7 +628,7 @@ async function saveRename() {
 
 /* --- Camera: live view, overlay modes (Fade, Edges, Blend), zoom, timer, level, capture. --- */
 let stream = null, facing = 'environment', gridMode = 0, camHasOverlay = false;
-let overlayRaw = null, overlayEdge = null, zoomTrack = null;
+let overlayRaw = null, overlayEdge = null;
 
 function computeEdges(dataUrl) {
   return new Promise((resolve, reject) => {
@@ -640,7 +706,7 @@ function hideOverlay() {
   overlayRaw = null; overlayEdge = null; camHasOverlay = false; overlaySource = 'project';
   const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges'); ov.classList.remove('diff');
   $('opRow').hidden = true; $('modeSeg').hidden = true;
-  $('camLastThumb').hidden = true; $('camhint').hidden = false;
+  $('camLastThumb').hidden = true; $('camhint').hidden = hintDismissed('aligno_hint_first');
   $('libChip').hidden = true;
 }
 function setOverlay(raw, source) {
@@ -652,13 +718,30 @@ function setOverlay(raw, source) {
   $('camhint').hidden = true;
   $('libChip').hidden = overlaySource !== 'library';
   applyOverlay();
-  maybeShowCamHelp();
 }
-function maybeShowCamHelp() {
-  let seen = false; try { seen = !!localStorage.getItem('aligno_camhelp'); } catch (e) {}
-  if (seen || state.screen !== 'camera') return;
-  try { localStorage.setItem('aligno_camhelp', '1'); } catch (e) {}
-  setTimeout(() => { if (state.screen === 'camera') $('camHelpModal').classList.add('on'); }, 700);
+
+/* Hints never block the camera: one quiet line under the mode tabs that
+   fades after a few seconds (shown on the first visits and when you switch
+   mode), and a first-photo tip that a single tap dismisses for good. */
+const MODE_HINTS = {
+  photo: 'Your last photo, see-through. Slide to make it stronger.',
+  edges: 'Only the outlines of your last photo, in pink.',
+  diff: 'The darker the picture, the better it lines up.'
+};
+function showModeHint(force) {
+  let n = 0; try { n = +localStorage.getItem('aligno_modehint') || 0; } catch (e) {}
+  if (!force && n >= 3) return;
+  if (!force) { try { localStorage.setItem('aligno_modehint', String(n + 1)); } catch (e) {} }
+  const h = $('modeHint');
+  h.textContent = MODE_HINTS[state.overlayMode] || '';
+  h.classList.remove('off');
+  clearTimeout(showModeHint._t);
+  showModeHint._t = setTimeout(() => h.classList.add('off'), 4000);
+}
+function hintDismissed(key) { try { return !!localStorage.getItem(key); } catch (e) { return false; } }
+function dismissHint(el, key) {
+  el.hidden = true;
+  try { localStorage.setItem(key, '1'); } catch (e) {}
 }
 async function loadLibraryOverlay(file) {
   if (!file) return;
@@ -688,7 +771,7 @@ async function applyOverlay() {
       $('omEdges').textContent = 'Working…';
       try { overlayEdge = await computeEdges(overlayRaw); }
       catch (e) { overlayEdge = overlayRaw; }
-      $('omEdges').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Edges';
+      $('omEdges').textContent = 'Edges';
       if (state.overlayMode !== 'edges') return;
     }
     ov.src = overlayEdge; ov.classList.add('edges');
@@ -807,20 +890,23 @@ async function openCamera() {
   const last = photos.length ? photos[photos.length - 1] : null;
   syncModeSeg();
   if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
+  zoom.last = last && typeof last.zoom === 'number' ? last.zoom : null;
+  zoom.lens = 'main';
   show('camera');
-  if (last) maybeShowCamHelp();
   await startCamera();
-  if (last && typeof last.zoom === 'number' && zoomTrack) {
-    $('zoom').value = last.zoom;
-    applyZoom(last.zoom);
-    camBadge('Zoom restored from last photo');
+  if (zoom.last) {
+    await setZoom(zoom.last, true);
+    if (zoom.last !== 1) camBadge('Zoom set to ' + zoomLabel(zoom.cur) + ', like your last photo');
   }
+  if (last) showModeHint(false);
 }
 
 function setGrid() {
-  const g = $('gridlines'), btn = $('gridBtn'), lbl = $('gridLbl');
+  const g = $('gridlines'), btn = $('gridBtn');
+  const names = ['off', 'thirds', 'fine'];
+  btn.setAttribute('aria-label', 'Grid and level: ' + names[gridMode]);
   g.innerHTML = '';
-  if (gridMode === 0) { g.classList.remove('on'); btn.classList.remove('act'); lbl.textContent = 'Grid'; return; }
+  if (gridMode === 0) { g.classList.remove('on'); btn.classList.remove('act'); return; }
   g.classList.add('on'); btn.classList.add('act');
   const fracs = gridMode === 1 ? [33.333, 66.667] : [25, 50, 75];
   fracs.forEach(p => {
@@ -828,33 +914,107 @@ function setGrid() {
     const h = document.createElement('div'); h.className = 'gline h'; h.style.top = p + '%'; g.appendChild(h);
   });
   g.appendChild(Object.assign(document.createElement('div'), { className: 'gcross' }));
-  lbl.textContent = gridMode === 1 ? 'Thirds' : 'Fine';
 }
 function syncGridLevel() { setLevel(gridMode !== 0 && state.screen === 'camera'); }
 
+/* Zoom: fixed steps (1×, 2×, 3×, ...) instead of a slider, so the same zoom
+   is one tap away months later. Pinching the viewfinder still allows any
+   value in between; every photo stores its zoom, the camera opens at the zoom
+   of the last photo, and a "match" button appears whenever you drift from it.
+   Phones that don't expose optical zoom to the browser get the same steps as
+   a digital crop, applied to the preview and the saved photo alike. */
+const zoom = { hw: false, track: null, min: 1, max: 1, cur: 1, last: null, lens: 'main', ultraId: null, ultraChecked: false, switching: false };
+const ZOOM_STEPS = [0.5, 1, 2, 3, 5, 10];
+function zoomLabel(v) { const r = Math.round(v * 10) / 10; return (r % 1 ? r.toFixed(1) : String(r)) + '×'; }
 function setupZoom() {
-  const row = $('zoomRow');
-  zoomTrack = null;
+  if (zoom.lens === 'ultra') { zoom.cur = 0.5; renderZoomStops(); return; }
+  zoom.track = null; zoom.hw = false; zoom.min = 1; zoom.max = 3; zoom.cur = 1;
   const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
   let caps = null;
   try { caps = track && track.getCapabilities ? track.getCapabilities() : null; } catch (e) {}
   if (track && caps && caps.zoom && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
-    zoomTrack = track;
-    const z = $('zoom');
-    z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step || 0.1;
-    let cur = caps.zoom.min;
-    try { const s = track.getSettings(); if (typeof s.zoom === 'number') cur = s.zoom; } catch (e) {}
-    z.value = cur;
-    $('zoomv').textContent = Number(cur).toFixed(1) + '×';
-    row.hidden = false;
-  } else {
-    row.hidden = true;
+    zoom.track = track; zoom.hw = true; zoom.min = caps.zoom.min; zoom.max = caps.zoom.max;
+    try { const s = track.getSettings(); if (typeof s.zoom === 'number') zoom.cur = s.zoom; } catch (e) {}
   }
+  renderZoomStops();
 }
-async function applyZoom(v) {
-  if (!zoomTrack) return;
-  try { await zoomTrack.applyConstraints({ advanced: [{ zoom: Number(v) }] }); } catch (e) {}
-  $('zoomv').textContent = Number(v).toFixed(1) + '×';
+function zoomStops() {
+  const s = ZOOM_STEPS.filter(v => v >= zoom.min - 0.01 && v <= zoom.max + 0.01);
+  if (s[0] !== 0.5 && hasUltraLens()) s.unshift(0.5);
+  return s.length ? s : [zoom.min];
+}
+function renderZoomStops() {
+  const box = $('zoomStops');
+  const stops = zoomStops();
+  if (stops.length < 2) { box.hidden = true; return; }
+  let near = stops[0];
+  stops.forEach(s => { if (Math.abs(Math.log(zoom.cur / s)) < Math.abs(Math.log(zoom.cur / near))) near = s; });
+  let html = stops.map(s => '<button data-z="' + s + '"' + (s === near ? ' class="on"' : '') + ' aria-label="Zoom ' + zoomLabel(s) + '">' +
+    zoomLabel(s === near ? zoom.cur : s) + '</button>').join('');
+  const reachable = zoom.last && (zoom.last >= zoom.min - 0.01 || (zoom.last < 0.75 && hasUltraLens())) && zoom.last <= zoom.max + 0.01;
+  if (reachable && Math.abs(zoom.last - zoom.cur) > 0.04) {
+    html += '<button class="match" data-z="' + zoom.last + '" aria-label="Match the zoom of your last photo">' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>' + zoomLabel(zoom.last) + '</button>';
+  }
+  box.innerHTML = html;
+  box.hidden = false;
+}
+function hasUltraLens() { return facing === 'environment' && !!zoom.ultraId && zoom.min > 0.5; }
+/* Finds a separate ultra-wide back camera by its name (iPhones call it
+   "Back Ultra Wide Camera"). Names are only readable once the camera is
+   allowed, so this runs after the first stream started. */
+async function detectUltraWide() {
+  if (zoom.ultraChecked || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  zoom.ultraChecked = true;
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const ultra = cams.find(d => /ultra ?wide|ultrawide|0[.,]5/i.test(d.label || '') && !/front|user/i.test(d.label));
+    if (ultra) zoom.ultraId = ultra.deviceId;
+  } catch (e) {}
+}
+function digitalZoom() { return zoom.lens === 'ultra' || zoom.hw ? 1 : zoom.cur; }
+function applyVideoTransform() {
+  const z = digitalZoom(), m = facing === 'user' ? -1 : 1;
+  $('video').style.transform = (z !== 1 || m !== 1) ? 'scale(' + (z * m) + ',' + z + ')' : '';
+}
+async function setZoom(v, quiet) {
+  if (zoom.switching) return;
+  v = Number(v) || 1;
+  // The 0.5× ultra-wide is a separate lens on many phones: switch to it
+  // below 0.75×, and back to the main lens above that.
+  if (hasUltraLens() && (v < 0.75) !== (zoom.lens === 'ultra')) {
+    zoom.switching = true;
+    zoom.lens = v < 0.75 ? 'ultra' : 'main';
+    await startCamera();
+    zoom.switching = false;
+    if (zoom.lens === 'ultra') { applyVideoTransform(); renderZoomStops(); return; }
+  }
+  if (zoom.lens === 'ultra') return;
+  v = Math.max(zoom.min, Math.min(zoom.max, v));
+  const near = zoomStops().find(s => Math.abs(s - v) / s < 0.04);
+  if (near) v = near;
+  zoom.cur = v;
+  if (zoom.hw && zoom.track) { try { await zoom.track.applyConstraints({ advanced: [{ zoom: v }] }); } catch (e) {} }
+  applyVideoTransform();
+  renderZoomStops();
+  if (!quiet && zoom.last && Math.abs(zoom.last - v) <= 0.04) camBadge('Same zoom as your last photo');
+}
+let vfPinch = null;
+function wireViewfinderPinch() {
+  const vf = $('vf'), pts = new Map();
+  vf.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    pts.set(e.pointerId, e);
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; vfPinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom.cur }; }
+  });
+  vf.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, e);
+    if (pts.size === 2 && vfPinch) { const [a, b] = [...pts.values()]; setZoom(vfPinch.z * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / vfPinch.d, true); }
+  });
+  const end = e => { pts.delete(e.pointerId); if (pts.size < 2) vfPinch = null; };
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => vf.addEventListener(t, end));
+  $('zoomStops').addEventListener('click', e => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.getAttribute('data-z')); });
 }
 
 async function startCamera() {
@@ -865,7 +1025,9 @@ async function startCamera() {
   }
   try {
     const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1440 } },
+      video: zoom.lens === 'ultra' && zoom.ultraId
+        ? { deviceId: { exact: zoom.ultraId }, width: { ideal: 2560 }, height: { ideal: 1440 } }
+        : { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1440 } },
       audio: false
     });
     if (stream) stream.getTracks().forEach(t => t.stop());
@@ -873,7 +1035,9 @@ async function startCamera() {
     $('video').srcObject = stream;
     $('screen-camera').classList.toggle('mirror', facing === 'user');
     await $('video').play();
+    if (zoom.lens === 'main') await detectUltraWide();
     setupZoom();
+    applyVideoTransform();
     keepAwake(true);
     syncGridLevel();
     err.classList.remove('on');
@@ -889,7 +1053,7 @@ async function startCamera() {
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   keepAwake(false);
-  zoomTrack = null;
+  zoom.track = null;
   cancelCountdown();
   setLevel(false);
 }
@@ -901,9 +1065,15 @@ async function capturePhoto() {
   if (!v.videoWidth || !state.projectId) return;
   if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
 
+  // Save exactly what the viewfinder shows: the 3:4 centre of the frame,
+  // narrowed further by digital zoom when the phone has no optical zoom.
+  const vw = v.videoWidth, vh = v.videoHeight, ar = 3 / 4, dz = digitalZoom();
+  let sw = vw, sh = vh;
+  if (vw / vh > ar) sw = vh * ar; else sh = vw / ar;
+  sw /= dz; sh /= dz;
   const c = document.createElement('canvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
+  c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext('2d').drawImage(v, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, c.width, c.height);
 
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
@@ -919,17 +1089,17 @@ async function capturePhoto() {
   if (!p) return;
   const ph = { id: uid(), projectId: p.id, ts: Date.now(), blob, src: 'camera' };
   if (thumb) ph.thumb = thumb;
-  if (zoomTrack) {
-    try { const s = zoomTrack.getSettings(); if (typeof s.zoom === 'number') ph.zoom = s.zoom; } catch (e) {}
-  }
+  if (zoom.cur) ph.zoom = Math.round(zoom.cur * 100) / 100;
   await dbAddPhoto(ph);
   p.updatedAt = Date.now();
   await dbPutProject(p);
   askPersistentStorage();
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
+  zoom.last = ph.zoom || null;
+  renderZoomStops();
   setOverlay(urlFor(ph, 'full'));
-  camBadge('Photo ' + count + ' saved. Now aligned to this one');
+  camBadge('Photo ' + count + ' saved');
 }
 
 function camBadge(text) {
@@ -1160,7 +1330,7 @@ async function alLoadCurrent() {
   const f = alState.files[alState.index];
   if (!f) { alFinish(); return; }
   $('alCount').textContent = (alState.index + 1) + ' of ' + alState.files.length;
-  $('alHint').hidden = alState.index !== 0;
+  $('alHint').hidden = alState.index !== 0 || hintDismissed('aligno_hint_align');
 
   if (alState.objUrl) { try { URL.revokeObjectURL(alState.objUrl); } catch (e) {} }
   const url = URL.createObjectURL(f);
@@ -2301,16 +2471,18 @@ function wire() {
     openPhotoViewAt(+t.getAttribute('data-i'));
   });
 
-  $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; startCamera(); });
+  $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; zoom.lens = 'main'; startCamera(); });
   $('camRetry').addEventListener('click', startCamera);
   $('gridBtn').addEventListener('click', () => {
     if (gridMode === 0) requestMotionPermission();
     gridMode = (gridMode + 1) % 3; setGrid(); syncGridLevel();
+    camBadge(gridMode === 0 ? 'Grid off' : gridMode === 1 ? 'Grid: thirds, with level' : 'Grid: fine, with level');
   });
   $('modeSeg').addEventListener('click', (e) => {
     const b = e.target.closest('[data-om]'); if (!b) return;
     state.overlayMode = b.getAttribute('data-om');
-    if (state.overlayMode === 'diff') { $('op').value = 100; $('opv').textContent = '100%'; camBadge('Line it up until the screen goes dark'); }
+    if (state.overlayMode === 'diff') { $('op').value = 100; $('opv').textContent = '100%'; }
+    showModeHint(true);
     syncModeSeg(); applyOverlay(); saveCamPrefs();
   });
   $('shot').addEventListener('click', shutterPressed);
@@ -2320,7 +2492,7 @@ function wire() {
     if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
     saveCamPrefs();
   });
-  $('zoom').addEventListener('input', function () { applyZoom(this.value); });
+  wireViewfinderPinch();
 
   $('fps').addEventListener('input', function () {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
@@ -2347,7 +2519,9 @@ function wire() {
   wireCompare();
   wireHistory();
 
-  $('camHelpBtn').addEventListener('click', () => $('camHelpModal').classList.add('on'));
+  $('helpRow').addEventListener('click', () => $('camHelpModal').classList.add('on'));
+  $('camhint').addEventListener('click', () => dismissHint($('camhint'), 'aligno_hint_first'));
+  $('alHint').addEventListener('click', () => dismissHint($('alHint'), 'aligno_hint_align'));
   $('camHelpOk').addEventListener('click', () => $('camHelpModal').classList.remove('on'));
   $('camHelpModal').addEventListener('click', e => { if (e.target === $('camHelpModal')) $('camHelpModal').classList.remove('on'); });
 
