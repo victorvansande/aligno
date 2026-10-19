@@ -147,6 +147,8 @@ Elk scherm heeft drie delen, altijd in deze volgorde:
 
 Camera, uitlijner, viewer en vergelijken zijn volledig donker: sluiten linksboven, de belangrijkste handeling onderaan in het midden.
 
+**Niets over een foto.** Waar een foto groot getoond wordt (fotoviewer, vergelijken, exportvoorbeeld, camera, uitlijner), staan tekst en knoppen op het zwart ernaast: bovenaan een balk, in het midden de foto, onderaan bijschrift en knoppen. De foto krijgt de ruimte die overblijft en wordt nooit bedekt. Pijlen naar vorige/volgende alleen met een muis, naast de foto; op een aanraakscherm veeg je. Vaste uitzonderingen, en alleen deze: in de camera de zoomstappen, de overlay-schuifregelaar en korte meldingen (glas), in de uitlijner het kader en het kruisje, en in kleine miniaturen in een raster een datum op een verloop. Een nieuwe uitzondering moet eerst hier bijgeschreven worden.
+
 Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties = rijen in een sheet. Iets definitief verwijderen = altijd een bevestigingssheet met een rode knop die zegt wat er gebeurt ("Delete project", niet "OK").
 
 ## 10. Componenten
@@ -170,10 +172,13 @@ Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties
 | Lege staat | `.empty` | Icoon of illustratie, titel `--fs-headline`, uitleg `--fs-sub`, eventueel één ghost-knop |
 | Toast | `.toast` | Pil, `--pill-bg`, onderaan, verdwijnt na 2,6 s |
 | Badge "Due" | `.duechip` | Pil, `--fs-micro`, gele tokens |
+| Melding | `.notice` | Paneel in `--accent-soft`, `--r-lg`, icoon, vette titel + uitleg, en een knop die het oplost (bv. "Take photo") |
 | Zoomstappen | `.zoom-stops` | Glazen pil onderaan in de zoeker, knoppen 36px, actieve stap in `--accent-on-dark` (zie §14) |
 | Modustabs | `.mode-tabs` | Tekstknoppen `--fs-body` 600, actief = `--accent-on-dark` op een lichte pil |
 | Tip | `.hint` | Glazen vlak met tekst `--fs-sub` en een ×, een tik sluit hem voorgoed (zie §16) |
 | Feedback | `.cbadge` | Donkere glazen pil bovenaan de zoeker, verdwijnt na 2,4 s |
+
+**Uitgeschakeld** ziet er altijd zo uit: grijs (`.is-disabled`: 40% dekking, niet aanraakbaar), en er staat **bovenaan** een `.notice` die zegt waarom en hoe je het oplost. Nooit alleen een grijze knop zonder uitleg, en nooit uitleg in kleine grijze tekst onder iets anders.
 
 Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan een component toe aan deze tabel.
 

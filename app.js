@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -524,8 +524,6 @@ function cmpRender() {
   imA.src = urlFor(A, 'full');
   $('cmpB').src = urlFor(B, 'full');
   if (imA.complete) cmpFit();
-  $('cmpTagA').textContent = fmtDate(A.ts);
-  $('cmpTagB').textContent = fmtDate(B.ts);
   $('cmpSegA').textContent = fmtDate(A.ts);
   $('cmpSegB').textContent = fmtDate(B.ts);
   $('cmpSeg').querySelectorAll('[data-slot]').forEach(x => x.classList.toggle('on', x.getAttribute('data-slot') === cmp.slot));
@@ -1863,9 +1861,14 @@ async function openExport() {
   exp.name = p.name;
   const n = exp.photos.length;
   $('expCount').textContent = n === 0 ? 'No photos yet'
-    : n === 1 ? '1 photo. Add at least one more to export'
+    : n === 1 ? '1 photo'
     : n + ' photos · live preview';
   $('gifResult').innerHTML = '';
+  // Fewer than 2 photos: say so up front and gray out every setting.
+  const few = n < 2;
+  $('expNeed').hidden = !few;
+  ['expFormat', 'expShape'].forEach(id => $(id).classList.toggle('is-disabled', few));
+  document.querySelectorAll('#screen-export .optcard, #screen-export .content > .sectlbl').forEach(el => el.classList.toggle('is-disabled', few));
   if (!videoType()) {
     exp.format = 'gif';
     $('expFormat').querySelector('[data-v="video"]').disabled = true;
@@ -2732,7 +2735,7 @@ function wire() {
   alViewport.addEventListener('wheel', alOnWheel, { passive: false });
 
   $('photoViewClose').addEventListener('click', closePhotoView);
-  $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'photoViewImg') closePhotoView(); });
+  $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'pvStage' || e.target.id === 'photoViewImg') closePhotoView(); });
   $('pvPrev').addEventListener('click', () => openPhotoViewAt(viewIndex - 1));
   $('pvNext').addEventListener('click', () => openPhotoViewAt(viewIndex + 1));
   $('pvDelete').addEventListener('click', deleteViewedPhoto);
@@ -2792,6 +2795,7 @@ function wire() {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
   });
   $('makeGifBtn').addEventListener('click', makeExport);
+  $('expNeedBtn').addEventListener('click', openCamera);
   const segPick = (id, key) => $(id).addEventListener('click', e => {
     const b = e.target.closest('[data-v]'); if (!b || b.disabled) return;
     exp[key] = b.getAttribute('data-v'); saveExportPrefs(); syncExportUi(); startExportPreview();
