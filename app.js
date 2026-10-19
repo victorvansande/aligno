@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v35';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -1204,9 +1204,11 @@ async function startCamera() {
     await videoReady(v);
     live.mode = '';
     chooseLiveMode();
+    // Final layout first, then a redraw at that size, then show the picture.
+    layoutCamera();
+    sizeLiveVideo($('screen-camera')._vfW || vf.offsetWidth);
     vf.classList.remove('switching');
     vf.classList.add('live');
-    layoutCamera();
     keepAwake(true);
     syncGridLevel();
     err.classList.remove('on');
@@ -1249,7 +1251,20 @@ function layoutCamera() {
   cam.classList.remove('vf-narrow');
   let w = fit();
   if (w < full - 1) { cam.classList.add('vf-narrow'); w = fit(); }
+  if (w === cam._vfW) return;
+  cam._vfW = w;
   cam.style.setProperty('--vf-w', w + 'px');
+  sizeLiveVideo(w);
+}
+/* iOS bug: a live camera <video> does not always follow a size change of its
+   frame and keeps showing the picture at its first, smaller size. So the
+   video gets explicit pixels and is made to redraw whenever the size changes. */
+function sizeLiveVideo(w) {
+  const v = $('video'), h = Math.round(w * 4 / 3);
+  v.style.width = w + 'px'; v.style.height = h + 'px';
+  if (!v.srcObject) return;
+  v.style.display = 'none'; void v.offsetWidth; v.style.display = '';
+  v.play().catch(() => {});
 }
 /* In a browser on Android the camera goes full screen, so the toolbars
    don't take the picture's room. (iPhone browsers don't allow this; there,

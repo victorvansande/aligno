@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v34';
+const CACHE = 'aligno-v35';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [
@@ -8,7 +8,10 @@ const ASSETS = [
   './gifenc.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png',
+  './icons/icon.svg',
+  './icons/favicon-32.png'
 ];
 
 self.addEventListener('install', (e) => {
@@ -108,7 +111,7 @@ async function checkDue() {
   await self.registration.showNotification(fresh.length === 1 ? 'Time for a new photo' : fresh.length + ' projects are due', {
     body: fresh.length === 1 ? 'Keep “' + names[0] + '” going with today’s shot.' : names.join(', '),
     icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
+    badge: './icons/icon-monochrome.png',
     tag: 'aligno-due',
     data: { project: fresh.length === 1 ? fresh[0].p.id : null }
   });

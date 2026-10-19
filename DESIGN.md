@@ -263,3 +263,15 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - **Feedback na een actie** (foto bewaard, zoom hersteld, raster aan) is een korte pil die na 2,4 s verdwijnt. Geen knop, geen tekst van meer dan één zin.
 - **Toasts** onderaan voor resultaten buiten de camera (back-up klaar, datum aangepast). Fouten zeggen wat er misging en wat je kan doen.
 - Twijfel je of iets een melding verdient? Dan niet. Liever één scherm minder dan één onderbreking meer.
+
+## 17. App-icoon
+
+- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een diep indigo verloop (#8286FA → #5B5FEF → #3E42C4) met een zachte lichtvlek linksboven. Diepte en licht, zodat het naast Liquid Glass (iOS) en Material Expressive (Android) past zonder er een na te doen.
+- **Bronbestanden** staan in `icons/src/` (`icon-full.svg`, `icon-rounded.svg`, `icon-mono.svg`). Een wijziging aan het icoon gebeurt daar, daarna `powershell -ExecutionPolicy Bypass -File icons/src/export.ps1` (Windows). Nooit losse PNG's met de hand aanpassen.
+- **Varianten en waarvoor**:
+  - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover.
+  - `icon-192/512-maskable.png`, volle vlak: Android, dat er zelf een vorm uit snijdt (cirkel, squircle, ...). Het teken blijft binnen de veilige zone (cirkel met straal 40% van het midden).
+  - `icon-monochrome.png`, wit op transparant: Android-thema-iconen (kleuren van de achtergrond) en het meldingsicoontje.
+  - `icon-192/512.png` met afgeronde hoeken: computers, startschermen, Chrome.
+  - `icon.svg` en `favicon-32.png`: het browsertabblad.
+- Een nieuw icoon testen: bekijk alle varianten gemaskeerd als cirkel en squircle, op licht en donker, en op 16 px.
