@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v32';
+const APP_VERSION = 'v33';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -247,12 +247,20 @@ function syncThemeSeg() {
 }
 
 const screens = ['landing', 'home', 'project', 'camera', 'export', 'reminders', 'settings', 'aligner'];
+// Going deeper slides in from the right, going back from the left, like
+// native navigation; screens on the same level just fade.
+const DEPTH = { landing: 0, home: 0, project: 1, settings: 1, export: 2, reminders: 2, camera: 2, aligner: 2 };
 function show(name) {
   if (state.screen === 'camera' && name !== 'camera') stopCamera();
   if (state.screen === 'export' && name !== 'export') stopExportPreview();
+  const from = DEPTH[state.screen], to = DEPTH[name];
+  const dir = name === state.screen ? '' : to > from ? 'push' : to < from ? 'pop' : '';
   screens.forEach(s => {
     const el = $('screen-' + s);
-    if (el) el.classList.toggle('active', s === name);
+    if (!el) return;
+    const on = s === name;
+    if (on && !el.classList.contains('active')) { el.classList.remove('push', 'pop'); if (dir) el.classList.add(dir); }
+    el.classList.toggle('active', on);
   });
   state.screen = name;
   setTheme(name === 'camera' || name === 'aligner');
@@ -285,14 +293,14 @@ async function renderHome() {
     const last = photos.length ? photos[photos.length - 1] : null;
     const thumb = last
       ? '<img class="pthumb" src="' + urlFor(last, 'thumb') + '" alt="">'
-      : '<div class="pthumb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
+      : '<div class="pthumb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V8a2 2 0 0 0-2-2h-3l-2-3H8L6 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg></div>';
     const n = photos.length;
     const due = isDue(p, last) ? '<span class="duechip">Due</span>' : '';
     return '<div class="pswipe" style="animation-delay:' + Math.min(idx * 40, 320) + 'ms">' +
-      '<button class="pdel" data-del="' + p.id + '"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></button>' +
+      '<button class="pdel" data-del="' + p.id + '" aria-label="Delete ' + escapeHtml(p.name) + '"><span class="pdel-in"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg><span>Delete</span></span></button>' +
       '<div class="pcard" data-open="' + p.id + '" role="button" tabindex="0">' + thumb +
       '<div class="grow"><div class="nm">' + escapeHtml(p.name) + '</div>' +
-      '<div class="mt">' + n + (n === 1 ? ' photo' : ' photos') + (last ? ' · ' + fmtAgo(last.ts) : '') + due + '</div></div>' +
+      '<div class="mt">' + (n ? n + (n === 1 ? ' photo' : ' photos') + ' · ' + fmtAgo(last.ts) : 'No photos yet') + due + '</div></div>' +
       '<span class="chev"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div></div>';
   }));
   list.innerHTML = cards.join('');
@@ -303,38 +311,40 @@ async function renderHome() {
   });
 }
 
-const SWIPE_W = 84;
+/* Swipe to delete, like iOS Mail: the red layer lies behind the whole card,
+   the card slides off it, and the trash icon grows with the drag (--p).
+   A quick flick opens or closes; dragging past the button meets resistance. */
+const SWIPE_W = 88;
+const SWIPE_EASE = 'transform .34s cubic-bezier(.2,.9,.25,1)';
+function setSwipe(wrap, x, animate) {
+  const card = wrap.querySelector('.pcard');
+  card.style.transition = animate ? SWIPE_EASE : 'none';
+  wrap.classList.toggle('animating', !!animate);
+  wrap.style.setProperty('--p', Math.min(1, Math.max(0, -x / SWIPE_W)).toFixed(3));
+  clearTimeout(wrap._clrT);
+  if (x === 0) {
+    card.style.transform = '';
+    const done = () => { card.style.transition = ''; wrap.classList.remove('sw', 'animating'); };
+    if (animate) wrap._clrT = setTimeout(done, 340); else done();
+  } else {
+    wrap.classList.add('sw');
+    card.style.transform = 'translateX(' + x + 'px)';
+  }
+}
 function closeOtherSwipes(except) {
   document.querySelectorAll('.pswipe').forEach(w => {
-    if (w !== except && w._swOpen) {
-      w._swOpen = false;
-      const c = w.querySelector('.pcard');
-      c.style.transition = 'transform .2s ease'; c.style.transform = 'translateX(0)';
-      setTimeout(() => { if (!w._swOpen) w.classList.remove('sw'); }, 220);
-    }
+    if (w !== except && w._swOpen) { w._swOpen = false; setSwipe(w, 0, true); }
   });
 }
 function wireSwipeCard(wrap) {
-  const card = wrap.querySelector('.pcard');
   const link = wrap.querySelector('[data-open]');
-  let startX = 0, startY = 0, baseX = 0, dragging = false, moved = false;
+  let startX = 0, startY = 0, baseX = 0, x = 0, dragging = false, moved = false, armed = false, lastX = 0, lastT = 0, vel = 0;
   wrap._swOpen = false;
-  function setX(x, animate) {
-    card.style.transition = animate ? 'transform .2s ease' : 'none';
-    clearTimeout(card._clrT);
-    if (x === 0) {
-      card.style.transform = '';
-      if (animate) card._clrT = setTimeout(() => { card.style.transition = ''; wrap.classList.remove('sw'); }, 220);
-      else { card.style.transition = ''; wrap.classList.remove('sw'); }
-    } else {
-      wrap.classList.add('sw');
-      card.style.transform = 'translateX(' + x + 'px)';
-    }
-  }
   wrap.addEventListener('pointerdown', e => {
     if (e.target.closest('.pdel')) return;
     dragging = true; moved = false;
-    startX = e.clientX; startY = e.clientY; baseX = wrap._swOpen ? -SWIPE_W : 0;
+    startX = e.clientX; startY = e.clientY; baseX = wrap._swOpen ? -SWIPE_W : 0; x = baseX;
+    armed = wrap._swOpen; lastX = e.clientX; lastT = e.timeStamp; vel = 0;
     closeOtherSwipes(wrap);
   });
   wrap.addEventListener('pointermove', e => {
@@ -343,29 +353,60 @@ function wireSwipeCard(wrap) {
     if (!moved && Math.hypot(dx, dy) < 8) return;
     if (!moved && Math.abs(dy) > Math.abs(dx)) { dragging = false; return; }
     moved = true;
-    setX(Math.max(-SWIPE_W, Math.min(0, baseX + dx)), false);
+    let nx = baseX + dx;
+    if (nx < -SWIPE_W) nx = -SWIPE_W - Math.pow(-SWIPE_W - nx, 0.8) * 0.35;
+    if (nx > 0) nx = Math.pow(nx, 0.7) * 0.3;
+    x = nx;
+    const dt = e.timeStamp - lastT;
+    if (dt > 0) vel = 0.8 * ((e.clientX - lastX) / dt) + 0.2 * vel;
+    lastX = e.clientX; lastT = e.timeStamp;
+    const nowArmed = x < -SWIPE_W / 2;
+    if (nowArmed !== armed) { armed = nowArmed; if (navigator.vibrate) { try { navigator.vibrate(6); } catch (er) {} } }
+    setSwipe(wrap, x, false);
   });
-  function endDrag(e) {
+  function endDrag() {
     if (!dragging) return;
     dragging = false;
     if (!moved) return;
-    const dx = e.clientX - startX;
-    const openIt = (baseX + dx) < -SWIPE_W / 2;
-    wrap._swOpen = openIt;
-    setX(openIt ? -SWIPE_W : 0, true);
+    let open = x < -SWIPE_W / 2;
+    if (vel < -0.35) open = true;
+    if (vel > 0.35) open = false;
+    wrap._swOpen = open;
+    setSwipe(wrap, open ? -SWIPE_W : 0, true);
+    // Swallow only the click that the drag itself may produce.
     link._justSwiped = true;
+    setTimeout(() => { link._justSwiped = false; }, 250);
   }
   wrap.addEventListener('pointerup', endDrag);
-  wrap.addEventListener('pointercancel', () => { dragging = false; });
+  wrap.addEventListener('pointercancel', () => { if (dragging) { dragging = false; wrap._swOpen = false; setSwipe(wrap, 0, true); } });
   link.addEventListener('click', (e) => {
     if (link._justSwiped) { link._justSwiped = false; e.preventDefault(); e.stopPropagation(); return; }
+    if (wrap._swOpen) { wrap._swOpen = false; setSwipe(wrap, 0, true); return; }
     openProject(link.getAttribute('data-open'));
+  });
+}
+// After a confirmed delete the card slides out and the list closes the gap.
+function collapseCard(wrap) {
+  return new Promise(resolve => {
+    if (!wrap || !wrap.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { resolve(); return; }
+    const card = wrap.querySelector('.pcard');
+    const h = wrap.offsetHeight, mb = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
+    card.style.transition = 'transform .24s cubic-bezier(.4,0,1,1)';
+    card.style.transform = 'translateX(-110%)';
+    wrap.style.setProperty('--p', 1);
+    const a = wrap.animate([{ height: h + 'px', marginBottom: mb + 'px', opacity: 1 }, { height: '0px', marginBottom: '0px', opacity: 0 }],
+      { duration: 260, delay: 160, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
+    // Never let the delete wait on an animation (a hidden page may not run it).
+    const t = setTimeout(resolve, 600);
+    a.onfinish = () => { clearTimeout(t); resolve(); };
   });
 }
 async function deleteProjectFromHome(id) {
   const p = await dbGetProject(id);
   const ok = await confirmSheet('Delete “' + ((p && p.name) || 'this project') + '”?', 'All its photos will be permanently removed from this device.', 'Delete project');
   if (!ok) { closeOtherSwipes(null); return; }
+  const btn = document.querySelector('[data-del="' + id + '"]');
+  await collapseCard(btn && btn.closest('.pswipe'));
   const photos = p ? await photosOf(p) : [];
   for (const ph of photos) {
     if (!ph.dataUrl) { try { await dbDelPhoto(ph.id); } catch (e) {} }
@@ -399,8 +440,9 @@ async function openProject(id) {
   const iv = reminderInterval(p);
   if (iv && last && !isDue(p, last)) {
     const left = Math.ceil(iv - (Date.now() - last.ts) / 86400000);
-    $('dueBanner').innerHTML = '<p class="nextchip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
-      'Next photo ' + (left <= 1 ? 'within a day' : 'in ' + left + ' days') + ' · ' + String(p.reminder).toLowerCase() + ' reminder</p>';
+    $('dueBanner').innerHTML = '<button class="nextchip" id="nextChip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>' +
+      'Next photo ' + (left <= 1 ? 'within a day' : 'in ' + left + ' days') + ' · ' + String(p.reminder).toLowerCase() + ' reminder</button>';
+    $('nextChip').addEventListener('click', openReminders);
   }
 
   $('projMeta').textContent = photos.length >= 2 ? 'All photos' : (photos.length + (photos.length === 1 ? ' photo' : ' photos') + ' · chronological');
@@ -605,6 +647,10 @@ async function deleteCurrentProject() {
 
 function openProjectMore() {
   $('moreTitle').textContent = $('projTitle').textContent || 'Project';
+  dbGetProject(state.projectId).then(p => {
+    const r = String((p && p.reminder) || 'off');
+    $('moreRemSub').textContent = r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
+  });
   $('moreModal').classList.add('on');
 }
 function closeProjectMore() { $('moreModal').classList.remove('on'); }
@@ -1640,7 +1686,13 @@ function createProjectAndImport() {
 let viewList = [], viewIndex = 0;
 function openPhotoViewAt(i) {
   if (!viewList.length) return;
+  const wasOpen = $('photoView').classList.contains('on'), prev = viewIndex;
   viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
+  // Moving to the next or previous photo slides it in from that side.
+  if (wasOpen && viewIndex !== prev && $('photoViewImg').animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const d = viewIndex > prev ? 1 : -1;
+    $('photoViewImg').animate([{ opacity: 0, transform: 'translateX(' + (d * 48) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+  }
   const ph = viewList[viewIndex];
   $('photoViewImg').src = urlFor(ph, 'full');
   $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
@@ -2510,6 +2562,53 @@ function askPersistentStorage() {
   } catch (e) {}
 }
 
+/* Sheets can be pulled down to close, like on iOS and Android. A drag starts
+   anywhere on the sheet while it is scrolled to the top (not on inputs or
+   sliders); far or fast enough closes it the same way as tapping outside, so
+   every sheet runs its own closing logic. */
+function wireSheetDrag() {
+  document.querySelectorAll('.modal-bg > .sheet').forEach(sheet => {
+    const bg = sheet.parentElement;
+    let y0 = 0, x0 = 0, dy = 0, t0 = 0, active = false, dragging = false, id = null;
+    sheet.addEventListener('pointerdown', e => {
+      if (e.target.closest('input, textarea, select') || sheet.scrollTop > 0) return;
+      active = true; dragging = false; dy = 0; y0 = e.clientY; x0 = e.clientX; t0 = e.timeStamp; id = e.pointerId;
+    });
+    sheet.addEventListener('pointermove', e => {
+      if (!active || e.pointerId !== id) return;
+      const d = e.clientY - y0;
+      if (!dragging) {
+        if (Math.abs(e.clientX - x0) > 10) { active = false; return; }
+        if (d < 8) return;
+        dragging = true;
+        sheet.classList.add('dragging');
+        try { sheet.setPointerCapture(id); } catch (er) {}
+      }
+      dy = Math.max(0, d);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+    });
+    const end = e => {
+      if (!active || e.pointerId !== id) return;
+      active = false;
+      if (!dragging) return;
+      sheet.classList.remove('dragging');
+      const v = dy / Math.max(1, e.timeStamp - t0);
+      sheet._dragged = true;
+      setTimeout(() => { sheet._dragged = false; }, 50);
+      if (dy > Math.min(140, sheet.offsetHeight * 0.3) || v > 0.6) {
+        sheet.style.transform = '';
+        bg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      } else {
+        sheet.style.transform = '';
+      }
+    };
+    sheet.addEventListener('pointerup', end);
+    sheet.addEventListener('pointercancel', end);
+    // A drag that started on a button must not also press it.
+    sheet.addEventListener('click', e => { if (sheet._dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+  });
+}
+
 /* --- Wiring: every event listener of the static markup. --- */
 function wire() {
   $('startBtn').addEventListener('click', () => { try { localStorage.setItem('aligno_seen', '1'); } catch (e) {} show('home'); });
@@ -2546,7 +2645,7 @@ function wire() {
 
   $('newPhotoBtn').addEventListener('click', openCamera);
   $('exportBtn').addEventListener('click', openExport);
-  $('reminderBtn').addEventListener('click', openReminders);
+  $('reminderBtn').addEventListener('click', () => { closeProjectMore(); openReminders(); });
   $('settingsBtn').addEventListener('click', openSettings);
   $('introRow').addEventListener('click', () => { show('landing'); });
   $('wipeRow').addEventListener('click', wipeAllData);
@@ -2696,6 +2795,7 @@ function wire() {
   });
   wireCompare();
   wireHistory();
+  wireSheetDrag();
 
   $('helpRow').addEventListener('click', () => $('camHelpModal').classList.add('on'));
   $('camhint').addEventListener('click', () => dismissHint($('camhint'), 'aligno_hint_first'));

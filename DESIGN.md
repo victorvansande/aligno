@@ -116,6 +116,7 @@ Regels:
 | `--h-seg` | 44px | Gesegmenteerde keuzes |
 | `--tap` | 44px | Minimale aanraakzone van alles wat tikbaar is |
 
+- **Iconen zonder tekst alleen voor algemeen bekende symbolen** (terug, sluiten, instellingen, delen, meer ⋯, camera wisselen). Al het andere krijgt een woord, bv. de knop "Install" in plaats van een pijltje.
 - Iconen: 16px in tekst en chips, 20px in knoppen en rijen, 22px in de topbalk en camera. Lijndikte 2 (1.8 vanaf 20px mag), ronde uiteinden.
 - Projectminiatuur 56px, cameraminiatuur 54px, sluiter 80px.
 
@@ -130,6 +131,11 @@ Regels:
 
 - Indrukken: knoppen, kaarten en rijen schalen naar 0.97, ronde iconknoppen naar 0.92.
 - Een scherm komt binnen met 8px omhoog en vervagen. Een sheet schuift van onder.
+- **Navigatie heeft een richting**: dieper gaan (project, export) schuift van rechts in, terug schuift van links in, schermen op hetzelfde niveau vervagen (`DEPTH` in `show()`).
+- **Sheets** schuiven omhoog bij openen en weer omlaag bij sluiten, en zijn met de vinger naar beneden weg te trekken (ver of snel genoeg = sluiten, anders veert hij terug). Wegtrekken telt altijd als Annuleren.
+- **Vegen om te verwijderen** werkt zoals iOS Mail: de rode laag ligt achter de hele kaart, de kaart schuift erover weg, het icoon groeit mee met de beweging, een snelle veeg is genoeg, verder trekken voelt weerstand. Na bevestigen schuift de kaart weg en sluit de lijst zich vloeiend.
+- **In de fotoviewer** schuift de volgende of vorige foto in vanuit die kant.
+- **Een animatie houdt nooit een actie tegen**: als een animatie niet afspeelt (pagina op de achtergrond), gaat de actie na korte tijd toch door.
 - Wie "minder beweging" aanzet op het toestel, krijgt geen animaties (`prefers-reduced-motion`).
 
 ## 9. Opbouw van een scherm
@@ -137,7 +143,7 @@ Regels:
 Elk scherm heeft drie delen, altijd in deze volgorde:
 1. **Topbalk**: terugknop links (behalve op Home), titel, maximaal twee iconknoppen rechts.
 2. **Inhoud**: scrollt. Begint met de belangrijkste informatie.
-3. **Voet**: de acties, onderaan waar je duim zit. De primaire knop staat bovenaan in de voet.
+3. **Voet**: de acties, onderaan waar je duim zit. **Maximaal één rij knoppen**: de primaire knop breed, hooguit één tweede knop ernaast. Instellingen die je zelden wijzigt (zoals de herinnering) horen in het ⋯-menu.
 
 Camera, uitlijner, viewer en vergelijken zijn volledig donker: sluiten linksboven, de belangrijkste handeling onderaan in het midden.
 
