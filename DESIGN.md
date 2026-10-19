@@ -277,6 +277,5 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
   - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover.
   - `icon-192/512-maskable.png`, volle vlak: Android, dat er zelf een vorm uit snijdt (cirkel, squircle, ...). Het teken blijft binnen de veilige zone (cirkel met straal 40% van het midden).
   - `icon-monochrome.png`, wit op transparant: Android-thema-iconen (kleuren van de achtergrond) en het meldingsicoontje.
-  - `icon-192/512.png` met afgeronde hoeken: computers, startschermen, Chrome.
-  - `icon.svg` en `favicon-32.png`: het browsertabblad.
+  - `icon-192/512.png`, `icon.svg` en `favicon-32.png`: in de vorm van een app-icoon, een **squircle** (superellips met exponent 5,2: rechte zijden, vloeiende hoeken, zoals iOS en macOS), op 94% van het vlak met wat transparante ruimte rond. Voor het browsertabblad, computers en Chrome. Nooit een gewone afgeronde rechthoek: die oogt op 16 tot 32 px als een vierkant.
 - Een nieuw icoon testen: bekijk alle varianten gemaskeerd als cirkel en squircle, op licht en donker, en op 16 px.
