@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v38';
+const APP_VERSION = 'v39';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -872,6 +872,70 @@ function shutterPressed() {
   tick();
 }
 
+/* Flash. Back camera: the phone's own lamp, where the browser lets a web app
+   switch it (Chrome on Android, Safari from iOS 18): Off, Auto, On, and Light
+   (stays on, handy for lining up in the dark). Front camera: the screen lights
+   up warm white for the shot, like a selfie flash. A back camera without a
+   usable lamp gets no flash button at all. Remembered per camera. */
+const FLASH_MODES = { environment: ['off', 'auto', 'on', 'light'], user: ['off', 'auto', 'on'] };
+const FLASH_NAMES = { off: 'Flash off', auto: 'Flash auto', on: 'Flash on', light: 'Light on' };
+const BOLT = '<path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/>';
+const FLASH_ICONS = {
+  off: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + BOLT + '<path d="M3 3l18 18"/></svg>',
+  auto: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + BOLT + '</svg>',
+  on: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round">' + BOLT + '</svg>',
+  light: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10v4l-2 3v11H9V10L7 7z"/><path d="M7 7h10"/><path d="M12 13v3"/></svg>'
+};
+const flashMode = { environment: 'off', user: 'off' };
+try { Object.assign(flashMode, JSON.parse(localStorage.getItem('aligno_flash') || '{}')); } catch (e) {}
+function hasTorch() { return !!camCaps().torch; }
+function flashAvailable() { return !!stream && (facing === 'user' || hasTorch()); }
+function curFlash() { const m = flashMode[facing]; return FLASH_MODES[facing].indexOf(m) >= 0 ? m : 'off'; }
+function syncFlashBtn() {
+  const b = $('flashBtn'), m = curFlash();
+  b.hidden = !flashAvailable();
+  b.innerHTML = FLASH_ICONS[m] + (m === 'auto' ? '<b class="tmr on">A</b>' : '');
+  b.classList.toggle('act', m === 'on' || m === 'light');
+  b.setAttribute('aria-label', FLASH_NAMES[m]);
+}
+async function setTorch(on) { if (hasTorch()) await applyCam({ torch: !!on }); }
+function cycleFlash() {
+  const list = FLASH_MODES[facing];
+  const m = list[(list.indexOf(curFlash()) + 1) % list.length];
+  flashMode[facing] = m;
+  try { localStorage.setItem('aligno_flash', JSON.stringify(flashMode)); } catch (e) {}
+  syncFlashBtn();
+  if (facing === 'environment') setTorch(m === 'light');
+  camBadge(FLASH_NAMES[m]);
+}
+// Auto: fire when the picture is dark (average brightness of a tiny copy).
+function sceneIsDark() {
+  try {
+    const v = $('video'), c = document.createElement('canvas');
+    c.width = c.height = 24;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(v, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    let s = 0;
+    for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    return s / (d.length / 4) < 60;
+  } catch (e) { return false; }
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+// Turns the flash on before the shot; returns how to turn it off again.
+async function fireFlash() {
+  const m = flashAvailable() ? curFlash() : 'off';
+  if (m === 'off' || m === 'light' || (m === 'auto' && !sceneIsDark())) return null;
+  if (facing === 'user') {
+    $('screenFlash').classList.add('on');
+    await wait(450); // the camera adjusts its exposure to the bright screen
+    return () => $('screenFlash').classList.remove('on');
+  }
+  await setTorch(true);
+  await wait(650);
+  return () => setTorch(false);
+}
+
 /* Level: uses gravity from the motion sensor to show how far the phone is
    tilted, so every shot is taken at the same angle. Shown with the grid. */
 let levelOn = false, levelRaf = 0, levelG = null;
@@ -968,20 +1032,44 @@ function syncGridLevel() { setLevel(gridMode !== 0 && state.screen === 'camera')
    of the last photo, and a "match" button appears whenever you drift from it.
    Phones that don't expose optical zoom to the browser get the same steps as
    a digital crop, applied to the preview and the saved photo alike. */
-const zoom = { hw: false, track: null, min: 1, max: 1, cur: 1, last: null, lens: 'main', ultraId: null, ultraChecked: false, switching: false };
+/* Real lenses, not crops: phones with several back lenses also expose a
+   combined camera (iOS: "Back Triple Camera", "Back Dual Wide Camera", "Back
+   Dual Camera"; Android: the default logical camera). Zooming on that one makes
+   the phone itself switch to the real ultra-wide, main or telephoto lens at
+   the right zoom, exactly like the native camera app. Its zoom counts from the
+   widest lens, so `scale` converts it to the familiar numbers (0.5×, 1×, 2×,
+   3×, 5×). Only phones without such a camera fall back to a separate
+   ultra-wide lens and a crop for the other steps. */
+const zoom = { hw: false, track: null, min: 1, max: 1, cur: 1, scale: 1, last: null, lens: 'main', ultraId: null,
+  multiId: null, multiScale: 1, multiFailed: false, lensesChecked: false, switching: false };
+try {
+  const saved = JSON.parse(localStorage.getItem('aligno_lenses') || 'null');
+  if (saved) Object.assign(zoom, { ultraId: saved.ultraId || null, multiId: saved.multiId || null, multiScale: saved.multiScale || 1 });
+} catch (e) {}
+function usingMulti() { return facing === 'environment' && zoom.lens === 'main' && !!zoom.multiId && !zoom.multiFailed; }
 const ZOOM_STEPS = [0.5, 1, 2, 3, 5, 10];
 function zoomLabel(v) { const r = Math.round(v * 10) / 10; return (r % 1 ? r.toFixed(1) : String(r)) + '×'; }
+// Returns false when the combined camera turns out to have no usable zoom;
+// the caller then reopens the plain main camera instead.
 function setupZoom() {
-  if (zoom.lens === 'ultra') { zoom.cur = 0.5; renderZoomStops(); return; }
-  zoom.track = null; zoom.hw = false; zoom.min = 1; zoom.max = 3; zoom.cur = 1;
+  if (zoom.lens === 'ultra') { zoom.cur = 0.5; renderZoomStops(); return true; }
+  const multi = usingMulti();
+  zoom.track = null; zoom.hw = false; zoom.min = 1; zoom.max = 3; zoom.cur = 1; zoom.scale = multi ? zoom.multiScale : 1;
   const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
   let caps = null;
   try { caps = track && track.getCapabilities ? track.getCapabilities() : null; } catch (e) {}
   if (track && caps && caps.zoom && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
-    zoom.track = track; zoom.hw = true; zoom.min = caps.zoom.min; zoom.max = caps.zoom.max;
-    try { const s = track.getSettings(); if (typeof s.zoom === 'number') zoom.cur = s.zoom; } catch (e) {}
+    zoom.track = track; zoom.hw = true;
+    zoom.min = caps.zoom.min * zoom.scale; zoom.max = caps.zoom.max * zoom.scale;
+    try { const s = track.getSettings(); if (typeof s.zoom === 'number') zoom.cur = s.zoom * zoom.scale; } catch (e) {}
+  } else if (multi) {
+    zoom.multiFailed = true;
+    return false;
+  } else {
+    zoom.scale = 1;
   }
   renderZoomStops();
+  return true;
 }
 function zoomStops() {
   const s = ZOOM_STEPS.filter(v => v >= zoom.min - 0.01 && v <= zoom.max + 0.01);
@@ -1005,16 +1093,28 @@ function renderZoomStops() {
   box.hidden = false;
 }
 function hasUltraLens() { return facing === 'environment' && !!zoom.ultraId && zoom.min > 0.5; }
-/* Finds a separate ultra-wide back camera by its name (iPhones call it
-   "Back Ultra Wide Camera"). Names are only readable once the camera is
-   allowed, so this runs after the first stream started. */
-async function detectUltraWide() {
-  if (zoom.ultraChecked || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-  zoom.ultraChecked = true;
+/* Finds the back lenses by their names. Names are only readable once the
+   camera is allowed, so this runs after the first stream started, and the
+   result is remembered for next time. A combined camera wins: Triple (ultra-
+   wide + main + tele) or Dual Wide (ultra-wide + main) count their zoom from
+   the ultra-wide, so 2 on their scale is 1×; Dual (main + tele) counts from
+   the main lens. */
+async function detectLenses() {
+  if (zoom.lensesChecked || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  zoom.lensesChecked = true;
   try {
-    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-    const ultra = cams.find(d => /ultra ?wide|ultrawide|0[.,]5/i.test(d.label || '') && !/front|user/i.test(d.label));
-    if (ultra) zoom.ultraId = ultra.deviceId;
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.label);
+    if (!cams.length) return;
+    const back = cams.filter(d => !/front|user|face|true ?depth/i.test(d.label));
+    const triple = back.find(d => /triple/i.test(d.label));
+    const dualWide = back.find(d => /dual ?wide/i.test(d.label));
+    const dual = back.find(d => /\bdual\b/i.test(d.label) && !/wide/i.test(d.label));
+    const multi = triple || dualWide || dual;
+    zoom.multiId = multi ? multi.deviceId : null;
+    zoom.multiScale = multi && multi !== dual ? 0.5 : 1;
+    const ultra = back.find(d => /ultra ?wide|ultrawide|0[.,]5/i.test(d.label));
+    zoom.ultraId = ultra ? ultra.deviceId : null;
+    localStorage.setItem('aligno_lenses', JSON.stringify({ multiId: zoom.multiId, multiScale: zoom.multiScale, ultraId: zoom.ultraId }));
   } catch (e) {}
 }
 function digitalZoom() { return zoom.lens === 'ultra' || zoom.hw ? 1 : zoom.cur; }
@@ -1035,34 +1135,89 @@ async function setZoom(v, quiet) {
   const near = zoomStops().find(s => Math.abs(s - v) / s < 0.04);
   if (near) v = near;
   zoom.cur = v;
-  if (zoom.hw && zoom.track) { try { await zoom.track.applyConstraints({ advanced: [{ zoom: v }] }); } catch (e) {} }
+  if (zoom.hw && zoom.track) { try { await zoom.track.applyConstraints({ advanced: [{ zoom: v / zoom.scale }] }); } catch (e) {} }
   applyLiveTransform();
   renderZoomStops();
   if (!quiet && zoom.last && Math.abs(zoom.last - v) <= 0.04) camBadge('Same zoom as your last photo');
 }
 let vfPinch = null;
-/* Tap to focus, where the browser lets a web app steer focus (Chrome on
-   Android). The tap is mapped through the same crop and mirroring as the live
-   view. No focus square is shown where focusing is not possible. */
-function canTapFocus() {
-  try {
-    const t = stream && stream.getVideoTracks()[0];
-    const caps = t && t.getCapabilities ? t.getCapabilities() : null;
-    const sup = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
-    return !!(caps && sup.pointsOfInterest && caps.focusMode && caps.focusMode.indexOf('single-shot') >= 0);
-  } catch (e) { return false; }
+/* Tap to focus and expose, where the browser lets a web app steer the camera
+   (Chrome on Android): a tap sets focus and exposure on that spot, mapped
+   through the same crop and mirroring as the live view. Where the camera also
+   allows exposure compensation, a sun appears beside the square and dragging
+   up or down on the picture makes it brighter or darker, like the iPhone
+   camera. Nothing is shown where the browser allows none of this. */
+function camCaps() {
+  try { const t = stream && stream.getVideoTracks()[0]; return (t && t.getCapabilities && t.getCapabilities()) || {}; } catch (e) { return {}; }
+}
+function camControls() {
+  const c = camCaps();
+  let sup = {};
+  try { sup = navigator.mediaDevices.getSupportedConstraints() || {}; } catch (e) {}
+  const has = (k, v) => Array.isArray(c[k]) && c[k].indexOf(v) >= 0;
+  const poi = !!sup.pointsOfInterest;
+  const ev = c.exposureCompensation;
+  return {
+    focus: poi && has('focusMode', 'single-shot'),
+    expo: poi && has('exposureMode', 'continuous'),
+    ev: ev && typeof ev.max === 'number' && ev.max > ev.min ? ev : null
+  };
+}
+function canTapFocus() { const k = camControls(); return k.focus || k.expo; }
+const evState = { val: 0, drag: null, pending: false, next: null, fadeT: null };
+function resetExposure() { evState.val = 0; evState.drag = null; }
+function evLabel(v) { const r = Math.round(v * 10) / 10; return r === 0 ? '0' : (r > 0 ? '+' : '−') + Math.abs(r).toFixed(1); }
+// Ring at a spot in the viewfinder: 'tap' pops and fades; 'hold' stays while
+// you drag the exposure; 'fade' lets it go after a moment.
+function showRing(x, y, how) {
+  const ring = $('focusRing'), vf = $('vf');
+  if (x !== null) {
+    // The square stays whole inside the picture, also for a tap near the edge.
+    x = Math.max(40, Math.min(vf.clientWidth - 40, x)); y = Math.max(40, Math.min(vf.clientHeight - 40, y));
+    ring.style.left = x + 'px'; ring.style.top = y + 'px';
+    ring.classList.toggle('ev-left', x > vf.clientWidth - 76);
+  }
+  ring.classList.toggle('has-ev', !!camControls().ev);
+  $('evVal').textContent = evLabel(evState.val);
+  ring.classList.remove('on', 'hold', 'fade'); void ring.offsetWidth;
+  ring.classList.add(how);
+}
+async function applyCam(c) {
+  try { await stream.getVideoTracks()[0].applyConstraints({ advanced: [c] }); } catch (e) {}
+}
+// One exposure change at a time; the newest value wins.
+async function setExposure(v) {
+  const ev = camControls().ev;
+  if (!ev) return;
+  const step = ev.step || 0.1;
+  v = Math.max(ev.min, Math.min(ev.max, Math.round(v / step) * step));
+  evState.val = v;
+  $('evVal').textContent = evLabel(v);
+  if (evState.pending) { evState.next = v; return; }
+  evState.pending = true;
+  await applyCam({ exposureCompensation: v });
+  evState.pending = false;
+  if (evState.next !== null) { const n = evState.next; evState.next = null; if (n !== v) setExposure(n); }
 }
 async function focusAt(clientX, clientY) {
-  if (!canTapFocus()) return;
+  const k = camControls();
+  if (!k.focus && !k.expo) return;
   const r = $('vf').getBoundingClientRect(), v = $('video');
   let nx = (clientX - r.left) / r.width, ny = (clientY - r.top) / r.height;
   if (facing === 'user') nx = 1 - nx;
-  const k = viewCrop(v.videoWidth, v.videoHeight);
-  const fx = (k.sx + nx * k.sw) / v.videoWidth, fy = (k.sy + ny * k.sh) / v.videoHeight;
-  const ring = $('focusRing');
-  ring.style.left = (clientX - r.left) + 'px'; ring.style.top = (clientY - r.top) + 'px';
-  ring.classList.remove('on'); void ring.offsetWidth; ring.classList.add('on');
-  try { await stream.getVideoTracks()[0].applyConstraints({ advanced: [{ pointsOfInterest: [{ x: fx, y: fy }], focusMode: 'single-shot' }] }); } catch (e) {}
+  const crop = viewCrop(v.videoWidth, v.videoHeight);
+  const fx = (crop.sx + nx * crop.sw) / v.videoWidth, fy = (crop.sy + ny * crop.sh) / v.videoHeight;
+  const c = { pointsOfInterest: [{ x: fx, y: fy }] };
+  if (k.focus) c.focusMode = 'single-shot';
+  if (k.expo) c.exposureMode = 'continuous';
+  // A new spot starts from normal brightness, like the native camera.
+  if (k.ev && evState.val !== 0) { evState.val = 0; c.exposureCompensation = 0; }
+  if (k.ev) {
+    showRing(clientX - r.left, clientY - r.top, 'hold');
+    clearTimeout(evState.fadeT);
+    evState.fadeT = setTimeout(() => { if (!evState.drag) showRing(null, null, 'fade'); }, 1600);
+  } else showRing(clientX - r.left, clientY - r.top, 'on');
+  await applyCam(c);
 }
 function wireViewfinderPinch() {
   const vf = $('vf'), pts = new Map();
@@ -1070,17 +1225,38 @@ function wireViewfinderPinch() {
     if (e.target.closest('button')) return;
     pts.set(e.pointerId, e);
     if (pts.size === 1) vf._tap = { x: e.clientX, y: e.clientY, t: Date.now() };
-    else vf._tap = null;
+    else { vf._tap = null; evState.drag = null; }
     if (pts.size === 2) { const [a, b] = [...pts.values()]; vfPinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom.cur }; }
   });
   vf.addEventListener('pointermove', e => {
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, e);
-    if (pts.size === 2 && vfPinch) { const [a, b] = [...pts.values()]; setZoom(vfPinch.z * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / vfPinch.d, true); }
+    if (pts.size === 2 && vfPinch) { const [a, b] = [...pts.values()]; setZoom(vfPinch.z * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / vfPinch.d, true); return; }
+    // One finger dragging up or down: exposure, where the camera allows it.
+    const tap = vf._tap, ev = pts.size === 1 && camControls().ev;
+    if (!ev) return;
+    if (!evState.drag && tap && Math.abs(e.clientY - tap.y) > 12 && Math.abs(e.clientY - tap.y) > Math.abs(e.clientX - tap.x)) {
+      evState.drag = { y: e.clientY, v: evState.val };
+      vf._tap = null;
+      clearTimeout(evState.fadeT);
+      const ring = $('focusRing'), r = vf.getBoundingClientRect();
+      // Keep the ring where it was if it is still showing, else put it in the middle.
+      const visible = ring.classList.contains('hold');
+      showRing(visible ? null : r.width / 2, visible ? null : r.height / 2, 'hold');
+    }
+    if (evState.drag) {
+      const span = vf.clientHeight * 0.8;
+      setExposure(evState.drag.v + (evState.drag.y - e.clientY) / span * (ev.max - ev.min));
+    }
   });
   const end = e => {
     const tap = vf._tap;
     if (e.type === 'pointerup' && tap && pts.size === 1 && Date.now() - tap.t < 350 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 10) focusAt(e.clientX, e.clientY);
+    if (evState.drag && pts.size === 1) {
+      evState.drag = null;
+      clearTimeout(evState.fadeT);
+      evState.fadeT = setTimeout(() => showRing(null, null, 'fade'), 600);
+    }
     vf._tap = null;
     pts.delete(e.pointerId); if (pts.size < 2) vfPinch = null;
   };
@@ -1166,12 +1342,16 @@ function videoReady(v) {
 // formats drop to a low frame rate on some phones.
 function videoConstraints() {
   const base = { width: { ideal: 2560 }, height: { ideal: 1920 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 30 }, resizeMode: { ideal: 'none' } };
-  return zoom.lens === 'ultra' && zoom.ultraId
-    ? Object.assign({ deviceId: { exact: zoom.ultraId } }, base)
-    : Object.assign({ facingMode: { ideal: facing } }, base);
+  if (zoom.lens === 'ultra' && zoom.ultraId) return Object.assign({ deviceId: { exact: zoom.ultraId } }, base);
+  if (usingMulti()) return Object.assign({ deviceId: { exact: zoom.multiId } }, base);
+  return Object.assign({ facingMode: { ideal: facing } }, base);
+}
+function currentDeviceId() {
+  try { return stream.getVideoTracks()[0].getSettings().deviceId || ''; } catch (e) { return ''; }
 }
 
-async function startCamera() {
+async function startCamera(depth) {
+  depth = typeof depth === 'number' ? depth : 0; // also called as a click handler
   const err = $('camerr');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     $('camerrMsg').textContent = 'The camera only works over a secure https link. Open the app via the shared link.';
@@ -1187,7 +1367,9 @@ async function startCamera() {
     let newStream;
     try { newStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false }); }
     catch (e) {
-      if (e && (e.name === 'OverconstrainedError' || e.name === 'NotReadableError')) {
+      if (e && (e.name === 'OverconstrainedError' || e.name === 'NotReadableError' || e.name === 'NotFoundError')) {
+        // A remembered lens may be gone (other phone, new browser): forget it.
+        if (usingMulti()) { zoom.multiFailed = true; zoom.lensesChecked = false; }
         newStream = await navigator.mediaDevices.getUserMedia({ video: zoom.lens === 'ultra' && zoom.ultraId ? { deviceId: { exact: zoom.ultraId } } : { facingMode: facing }, audio: false });
       } else throw e;
     }
@@ -1197,8 +1379,14 @@ async function startCamera() {
     v.srcObject = stream;
     $('screen-camera').classList.toggle('mirror', facing === 'user');
     await v.play();
-    if (zoom.lens === 'main') await detectUltraWide();
-    setupZoom();
+    if (zoom.lens === 'main' && facing === 'environment') {
+      await detectLenses();
+      // First time the lens names are known: move over to the combined camera.
+      if (usingMulti() && currentDeviceId() && currentDeviceId() !== zoom.multiId && depth < 2) return startCamera(depth + 1);
+    }
+    if (!setupZoom() && depth < 2) return startCamera(depth + 1);
+    // The combined camera starts on its widest lens; open at 1× like any camera.
+    if (zoom.hw && zoom.scale < 1 && Math.abs(zoom.cur - 1) > 0.04) await setZoom(1, true);
     await videoReady(v);
     live.mode = '';
     chooseLiveMode();
@@ -1209,6 +1397,9 @@ async function startCamera() {
     vf.classList.add('live');
     keepAwake(true);
     syncGridLevel();
+    resetExposure();
+    syncFlashBtn();
+    if (facing === 'environment' && curFlash() === 'light') setTorch(true);
     err.classList.remove('on');
   } catch (e) {
     const n = e && e.name;
@@ -1281,16 +1472,23 @@ function exitCameraFullscreen() {
 
 function toBlobP(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
 
+let capturing = false;
 async function capturePhoto() {
   const v = $('video');
-  if (!v.videoWidth || !state.projectId) return;
+  if (!v.videoWidth || !state.projectId || capturing) return;
+  capturing = true;
+  try { await takePhoto(v); } finally { capturing = false; }
+}
+async function takePhoto(v) {
   if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+  const flashOff = await fireFlash();
 
   // Save exactly what the viewfinder shows: the same crop the live view draws.
   const k = viewCrop(v.videoWidth, v.videoHeight);
   const c = document.createElement('canvas');
   c.width = Math.round(k.sw); c.height = Math.round(k.sh);
   c.getContext('2d').drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, c.width, c.height);
+  if (flashOff) flashOff();
 
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
@@ -2778,6 +2976,7 @@ function wire() {
   });
   $('shot').addEventListener('click', shutterPressed);
   $('timerBtn').addEventListener('click', cycleTimer);
+  $('flashBtn').addEventListener('click', cycleFlash);
   $('op').addEventListener('input', function () {
     $('opv').textContent = Math.round(this.value) + '%';
     if (camHasOverlay) $('overlay').style.opacity = this.value / 100;
