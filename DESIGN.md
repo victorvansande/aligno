@@ -60,6 +60,7 @@ Regels:
 - **Gewichten**: 400 voor tekst, 500 voor bedieningslabels (segmenten, camera), 600 voor titels, namen en knoppen. 700 alleen voor cijfers in badges en de aftelling.
 - **Geen andere groottes.** Enige uitzondering: het aftelcijfer van de zelfontspanner (120px).
 - Titels en labels in zinsvorm ("New project", niet "New Project" en niet "NEW PROJECT").
+- **Kleinere tekst onder een titel staat in een eigen blok** (`display:block`) met zijn eigen regelafstand. Nooit een kleine losse tekst binnen een grotere regel: dan krijgt elke afgebroken regel de afstand van de grotere tekst en ontstaan er gaten in één doorlopende zin. Controle: de afstand tussen twee regels is nooit meer dan 1,7 keer de eigen lettergrootte.
 - Tekst die kan afgekapt worden (namen) krijgt `text-overflow: ellipsis`, nooit een tweede regel in een topbalk.
 
 ## 4. Ruimte
@@ -105,6 +106,7 @@ Regels:
 - `--sh-2`: zwevend (sheets, toasts, update-melding).
 - `--sh-accent`: alleen de primaire knop.
 - **Kaart** = `--surface` + 1px `--line` + `--sh-1`. **Paneel** = `--surface-2`, geen rand, geen schaduw. Meng die twee niet.
+- **Geen gloed**: geen lichtvlekken, gloed of decoratieve verlopen achter logo's, titels of schermen. Schermen hebben een effen `--bg`. Effecten moeten een functie hebben (glas over inhoud, schaduw voor diepte).
 - **Glas** (`backdrop-filter`) alleen op dingen die over andere inhoud zweven: sheets, de achtergrond achter sheets, cameraknoppen. Nooit op gewone kaarten.
 
 ## 7. Afmetingen en aanraken
@@ -271,7 +273,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 
 ## 17. App-icoon
 
-- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een diep indigo verloop (#8286FA → #5B5FEF → #3E42C4) met een zachte lichtvlek linksboven. Diepte en licht, zodat het naast Liquid Glass (iOS) en Material Expressive (Android) past zonder er een na te doen.
+- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een vlak indigo met hooguit een nauwelijks zichtbaar verloop (#6266F1 → #5357E6). **Geen gloed, lichtvlek of schaduw**: het systeem (Liquid Glass op iOS, Material op Android) legt zelf zijn effecten erover.
 - **Bronbestanden** staan in `icons/src/` (`icon-full.svg`, `icon-rounded.svg`, `icon-mono.svg`). Een wijziging aan het icoon gebeurt daar, daarna `powershell -ExecutionPolicy Bypass -File icons/src/export.ps1` (Windows). Nooit losse PNG's met de hand aanpassen.
 - **Varianten en waarvoor**:
   - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover.

@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v38';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -750,7 +750,7 @@ function hideOverlay() {
   overlayRaw = null; overlayEdge = null; camHasOverlay = false; overlaySource = 'project';
   const ov = $('overlay'); ov.removeAttribute('src'); ov.style.opacity = 0; ov.classList.remove('edges'); ov.classList.remove('diff');
   $('opRow').hidden = true; $('modeSeg').hidden = true;
-  $('camLastThumb').hidden = true; $('camhint').hidden = hintDismissed('aligno_hint_first');
+  $('camLastThumb').hidden = true; $('camhint').hidden = hintDismissed('aligno_hint_spot');
   $('libChip').hidden = true;
   layoutCamera();
 }
@@ -2819,7 +2819,7 @@ function wire() {
   wireSheetDrag();
 
   $('helpRow').addEventListener('click', () => $('camHelpModal').classList.add('on'));
-  $('camhint').addEventListener('click', () => dismissHint($('camhint'), 'aligno_hint_first'));
+  $('camhint').addEventListener('click', () => dismissHint($('camhint'), 'aligno_hint_spot'));
   $('alHint').addEventListener('click', () => dismissHint($('alHint'), 'aligno_hint_align'));
   $('camHelpOk').addEventListener('click', () => $('camHelpModal').classList.remove('on'));
   $('camHelpModal').addEventListener('click', e => { if (e.target === $('camHelpModal')) $('camHelpModal').classList.remove('on'); });

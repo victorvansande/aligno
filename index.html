@@ -28,7 +28,7 @@
     --warn-bg:#FCEFD4; --warn-text:#6E4A02; --warn-strong:#8A5A00;
     --ink:#0B0B10; --on-dark:#FFFFFF; --on-dark-2:#EDEDF2; --on-dark-3:#A6A6B0;
     --glass-dark:rgba(28,30,33,.42); --glass-light:rgba(255,255,255,.88);
-    --scrim:rgba(11,11,16,.44); --press:rgba(0,0,0,.06); --glow:var(--accent-soft);
+    --scrim:rgba(11,11,16,.44); --press:rgba(0,0,0,.06);
     --pill-bg:#0B0B10; --pill-fg:#FFFFFF;
     --level:#FFD43B; --level-ok:#49E08A; --accent-on-dark:#AEB0FF;
 
@@ -68,8 +68,7 @@
 
   /* ---- 3. Layout ---- */
   .app{ position:fixed; inset:0; display:flex; flex-direction:column; }
-  .screen{ position:absolute; inset:0; display:none; flex-direction:column;
-    background:radial-gradient(ellipse 120% 55% at 50% -8%, var(--glow) 0%, var(--bg) 58%); }
+  .screen{ position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg); }
   .screen.active{ display:flex; }
   .topbar{ display:flex; align-items:center; gap:var(--s-1); min-height:calc(env(safe-area-inset-top) + 64px);
     padding:calc(env(safe-area-inset-top) + var(--s-3)) var(--gutter) var(--s-2); }
@@ -250,6 +249,12 @@
   .ex-txt span{ font-size:var(--fs-sub); color:var(--text-2); }
 
   .pcard:focus-visible, .ptile:focus-visible, .btn:focus-visible, .set-row:focus-visible, .ex:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* Secondary text under a title is its own block with its own line height.
+     As a loose inline span inside larger text, every wrapped line would get the
+     line height of the larger text (DESIGN.md §3). */
+  .tchip span, .ld-step span, .help-row span, .share-pick span, .ex-txt span, .notice span,
+  .hero-stats .stat span, .stat-card span{ display:block; line-height:var(--lh-snug); }
 
   /* ---- 5. Screens ---- */
   /* Landing */
@@ -477,6 +482,7 @@
   .hint{ display:flex; align-items:center; gap:var(--s-3); max-width:calc(100% - 2 * var(--s-4)); padding:var(--s-2) var(--s-3) var(--s-2) var(--s-4);
     border:none; border-radius:var(--r-md); cursor:pointer; text-align:left; color:var(--on-dark); background:var(--glass-dark);
     backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); font-size:var(--fs-sub); line-height:var(--lh-snug); }
+  .hint b{ font-weight:600; }
   .hint i{ flex:none; font-style:normal; font-size:var(--fs-title); line-height:1; opacity:.6; }
   .zoom-stops{ align-self:center; display:flex; align-items:center; gap:var(--s-1); padding:var(--s-1); border-radius:var(--r-pill); background:var(--glass-dark);
     backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
@@ -596,7 +602,7 @@
       --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
       --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
       --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
-      --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08); --glow:#1A1B36;
+      --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08);
       --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
       --sh-1:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-2:0 8px 32px rgba(0,0,0,.5);
       color-scheme:dark;
@@ -607,7 +613,7 @@
     --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
     --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
     --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
-    --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08); --glow:#1A1B36;
+    --glass-light:rgba(26,26,34,.9); --press:rgba(255,255,255,.08);
     --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
     --sh-1:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-2:0 8px 32px rgba(0,0,0,.5);
     color-scheme:dark;
@@ -833,7 +839,7 @@
         <div class="countdown" id="countdown"></div>
         <div class="vf-top">
           <div class="cbadge" id="cbadge" hidden></div>
-          <button class="hint" id="camhint" hidden>Take the first photo from a spot you can come back to.<i aria-hidden="true">×</i></button>
+          <button class="hint" id="camhint" hidden><span><b>Remember where you stand.</b> Pick a fixed spot you can find again: the same floor tile, your heels against the doorframe, a hand on the same tree. Next time, stand there again.</span><i aria-hidden="true">×</i></button>
           <div class="libchip" id="libChip" hidden>
             <span>Gallery photo</span>
             <button id="libReset">Use last photo</button>
@@ -1034,6 +1040,7 @@
     </div>
     <p class="sectlbl">Handy extras</p>
     <ul class="help-tips">
+      <li><b>Remember where you stand</b> for the first photo: the same floor tile, heels against the doorframe, a hand on the same tree. Standing in the same spot does most of the aligning for you.</li>
       <li><b>Zoom steps</b> (1×, 2×, ...) give the same zoom every time. The camera opens at the zoom of your last photo.</li>
       <li><b>Grid</b> also shows a level, so the phone is straight every time.</li>
       <li><b>Timer</b> (top) gives you 3 or 10 seconds, handy for photos of yourself.</li>
