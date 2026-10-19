@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -802,6 +802,8 @@ function ncc(p, q) {
 function loadAlignRef() {
   const url = overlayRaw;
   if (!url || align.refUrl === url || align.loading === url) return;
+  // A failed load is tried again, but not more than once a second.
+  if (align.failUrl === url && Date.now() - align.failT < 1000) return;
   align.loading = url;
   const im = new Image();
   im.onload = () => {
@@ -813,14 +815,30 @@ function loadAlignRef() {
     try { align.ref = alignFeatures(im, (W - sw) / 2, (H - sh) / 2, sw, sh); align.refUrl = url; } catch (e) { align.ref = null; }
     align.loading = null;
   };
+  im.onerror = () => { if (align.loading === url) { align.loading = null; align.failUrl = url; align.failT = Date.now(); } };
   im.src = url;
 }
+/* How close the last certain measurement of the live guide says you are, as
+   a weight: 0 = spot on, 1 = just off enough to mention (same units as the
+   advice). Null without a recent certain measurement. */
+function geoError() {
+  const m = guide.sure;
+  if (!m || Date.now() - m.t > 1500 || m.url !== overlayRaw) return null;
+  const r = m.r;
+  return Math.max(Math.abs(Math.log(r.s)) / 0.05, Math.abs(r.tx) / 0.04, Math.abs(r.ty) / 0.04, Math.abs(r.th) * 180 / Math.PI / 2.5);
+}
+/* Two measurements fill the ring: a quick comparison of the whole picture
+   (several times a second, only high when you are very close), and the live
+   guide's measurement of how far off you are (rises step by step as you get
+   closer, and is not thrown by other light). The higher one counts; either
+   one can turn it green. */
 function alignTick() {
   const ring = $('alignRing'), v = $('video');
   const active = state.screen === 'camera' && camHasOverlay && !!stream && v.videoWidth > 0 && !document.hidden;
   if (!active) { ring.classList.remove('on', 'ok'); setShutterScore(null); align.ema = 0; align.ok = false; return; }
   loadAlignRef();
-  if (!align.ref || align.refUrl !== overlayRaw) return;
+  // No (fresh) reference yet: show nothing rather than an old number.
+  if (!align.ref || align.refUrl !== overlayRaw) { ring.classList.remove('on', 'ok'); setShutterScore(null); align.ema = 0; align.ok = false; return; }
   let raw;
   try {
     const k = viewCrop(v.videoWidth, v.videoHeight);
@@ -828,14 +846,15 @@ function alignTick() {
     raw = 0.5 * ncc(f.gray, align.ref.gray) + 0.5 * ncc(f.grad, align.ref.grad);
   } catch (e) { return; }
   align.ema = align.ema ? align.ema * 0.6 + raw * 0.4 : raw;
-  const s = align.ema;
-  const ok = align.ok ? s >= 0.74 : s >= 0.8;
+  const s = align.ema, ge = geoError();
+  const ok = (align.ok ? s >= 0.74 : s >= 0.8) || (ge !== null && ge < (align.ok ? 0.8 : 0.5));
   if (ok && !align.ok) {
     if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
     if (!align.told) { align.told = true; camBadge('Lined up with your last photo'); }
   }
   align.ok = ok;
-  const fill = Math.max(0.04, Math.min(1, (s - 0.3) / 0.5));
+  let fill = Math.max(0.04, Math.min(1, (s - 0.3) / 0.5));
+  if (ge !== null) fill = Math.max(fill, Math.min(1, Math.max(0.04, 1 - ge * 0.11)));
   ring.querySelector('circle').style.strokeDashoffset = String(100 - fill * 100);
   ring.classList.add('on');
   ring.classList.toggle('ok', ok);
@@ -849,7 +868,7 @@ function alignTick() {
     let n = 0; try { n = +localStorage.getItem('aligno_hint_ring') || 0; } catch (e) {}
     if (n < 2) {
       try { localStorage.setItem('aligno_hint_ring', String(n + 1)); } catch (e) {}
-      camBadge('The ring shows how well you line up with your last photo', 4000);
+      camBadge('The ring shows how well you line up', 4000);
     }
   }
 }
@@ -947,11 +966,15 @@ function guideResult(r) {
   if (!guide.timer) return;
   const sure = certain(r, 0.6);
   guide.track = sure ? r : null;
-  const k = guideAdvice(sure ? r : null);
+  // Also read by the shutter ring (geoError), so it keeps measuring even
+  // while the pill itself has nothing to say.
+  guide.sure = sure ? { r, t: Date.now(), url: guide.refUrl } : null;
+  const mute = guide.off || align.ok || !$('cbadge').hidden || countdownT;
+  const k = mute ? null : guideAdvice(sure ? r : null);
   if (!k) {
     guide.cand = null; guide.streak = 0;
     // Let go only after two quiet results, so the pill does not flicker.
-    if (++guide.miss >= 2) showGuide(null);
+    if (mute || ++guide.miss >= 2) showGuide(null);
     return;
   }
   guide.miss = 0;
@@ -961,14 +984,14 @@ function guideResult(r) {
 }
 function guideTick() {
   const v = $('video');
-  const quiet = guide.off || !camHasOverlay || !stream || !v.videoWidth || document.hidden || align.ok || !$('cbadge').hidden || countdownT;
-  if (quiet) { guide.cand = null; guide.streak = 0; showGuide(null); return; }
+  if (!camHasOverlay || !stream || !v.videoWidth || document.hidden) { guide.cand = null; guide.streak = 0; guide.sure = null; showGuide(null); return; }
   if (guide.busy) return;
   guide.busy = true;
   (async () => {
     try {
       const ref = overlayRaw;
       if (guide.refUrl !== ref) {
+        guide.sure = null;
         const im = await loadImage(ref);
         await awCall({ refKey: 'live', ref: grayPyramid(im, crop34(im.naturalWidth, im.naturalHeight)) });
         guide.refUrl = ref; guide.track = null;
