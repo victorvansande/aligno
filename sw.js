@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v39';
+const CACHE = 'aligno-v40';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [

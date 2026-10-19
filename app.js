@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v40';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -1060,6 +1060,9 @@ function setupZoom() {
   try { caps = track && track.getCapabilities ? track.getCapabilities() : null; } catch (e) {}
   if (track && caps && caps.zoom && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
     zoom.track = track; zoom.hw = true;
+    // Safari (and Chrome on Android) already count from the main lens: the
+    // ultra-wide shows up as a zoom below 1. Then the numbers are used as is.
+    if (caps.zoom.min < 0.99) zoom.scale = 1;
     zoom.min = caps.zoom.min * zoom.scale; zoom.max = caps.zoom.max * zoom.scale;
     try { const s = track.getSettings(); if (typeof s.zoom === 'number') zoom.cur = s.zoom * zoom.scale; } catch (e) {}
   } else if (multi) {
@@ -1386,7 +1389,7 @@ async function startCamera(depth) {
     }
     if (!setupZoom() && depth < 2) return startCamera(depth + 1);
     // The combined camera starts on its widest lens; open at 1× like any camera.
-    if (zoom.hw && zoom.scale < 1 && Math.abs(zoom.cur - 1) > 0.04) await setZoom(1, true);
+    if (zoom.hw && usingMulti() && Math.abs(zoom.cur - 1) > 0.04) await setZoom(1, true);
     await videoReady(v);
     live.mode = '';
     chooseLiveMode();
