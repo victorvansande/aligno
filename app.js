@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -708,6 +708,7 @@ function hideOverlay() {
   $('opRow').hidden = true; $('modeSeg').hidden = true;
   $('camLastThumb').hidden = true; $('camhint').hidden = hintDismissed('aligno_hint_first');
   $('libChip').hidden = true;
+  layoutCamera();
 }
 function setOverlay(raw, source) {
   overlayRaw = raw; overlayEdge = null; camHasOverlay = true;
@@ -718,6 +719,7 @@ function setOverlay(raw, source) {
   $('camhint').hidden = true;
   $('libChip').hidden = overlaySource !== 'library';
   applyOverlay();
+  layoutCamera();
 }
 
 /* Hints never block the camera: one quiet line under the mode tabs that
@@ -732,11 +734,7 @@ function showModeHint(force) {
   let n = 0; try { n = +localStorage.getItem('aligno_modehint') || 0; } catch (e) {}
   if (!force && n >= 3) return;
   if (!force) { try { localStorage.setItem('aligno_modehint', String(n + 1)); } catch (e) {} }
-  const h = $('modeHint');
-  h.textContent = MODE_HINTS[state.overlayMode] || '';
-  h.classList.remove('off');
-  clearTimeout(showModeHint._t);
-  showModeHint._t = setTimeout(() => h.classList.add('off'), 4000);
+  camBadge(MODE_HINTS[state.overlayMode] || '', 4000);
 }
 function hintDismissed(key) { try { return !!localStorage.getItem(key); } catch (e) { return false; } }
 function dismissHint(el, key) {
@@ -893,12 +891,14 @@ async function openCamera() {
   zoom.last = last && typeof last.zoom === 'number' ? last.zoom : null;
   zoom.lens = 'main';
   show('camera');
+  layoutCamera();
   await startCamera();
   if (zoom.last) {
     await setZoom(zoom.last, true);
     if (zoom.last !== 1) camBadge('Zoom set to ' + zoomLabel(zoom.cur) + ', like your last photo');
   }
-  if (last) showModeHint(false);
+  // One message at a time: the zoom note wins over the mode explanation.
+  if (last && !(zoom.last && zoom.last !== 1)) showModeHint(false);
 }
 
 function setGrid() {
@@ -983,7 +983,7 @@ async function setZoom(v, quiet) {
     zoom.lens = v < 0.75 ? 'ultra' : 'main';
     await startCamera();
     zoom.switching = false;
-    if (zoom.lens === 'ultra') { renderZoomStops(); return; }
+    if (zoom.lens === 'ultra') { applyLiveTransform(); renderZoomStops(); return; }
   }
   if (zoom.lens === 'ultra') return;
   v = Math.max(zoom.min, Math.min(zoom.max, v));
@@ -991,6 +991,7 @@ async function setZoom(v, quiet) {
   if (near) v = near;
   zoom.cur = v;
   if (zoom.hw && zoom.track) { try { await zoom.track.applyConstraints({ advanced: [{ zoom: v }] }); } catch (e) {} }
+  applyLiveTransform();
   renderZoomStops();
   if (!quiet && zoom.last && Math.abs(zoom.last - v) <= 0.04) camBadge('Same zoom as your last photo');
 }
@@ -1042,11 +1043,14 @@ function wireViewfinderPinch() {
   $('zoomStops').addEventListener('click', e => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.getAttribute('data-z')); });
 }
 
-/* --- Live view: the camera stream is drawn onto a canvas, frame by frame,
-   with exactly the crop that a saved photo gets (viewCrop). So the viewfinder
-   can never be stretched or letterboxed by the browser (iOS ignores
-   object-fit on camera streams), and what you see is what you save. The
-   <video> element only feeds the canvas. --- */
+/* --- Live view. The camera is asked for 4:3, the same shape as the
+   viewfinder (3:4 when held upright). When the stream has that shape, the
+   <video> element is shown directly: full frame rate, and it fits exactly
+   whatever fit mode the browser applies (iOS ignores object-fit on camera
+   streams). Only when a camera delivers another shape does a canvas take
+   over, drawing each frame with the exact photo crop (viewCrop), so nothing
+   is ever stretched or letterboxed. The canvas also holds the last frame,
+   blurred, while switching camera or lens. --- */
 function viewCrop(vw, vh) {
   const ar = 3 / 4, dz = digitalZoom();
   let sw = vw, sh = vh;
@@ -1054,50 +1058,69 @@ function viewCrop(vw, vh) {
   sw /= dz; sh /= dz;
   return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
 }
-const live = { raf: 0, hold: false, frames: 0, last: 0 };
-function drawLive(now) {
-  live.raf = requestAnimationFrame(drawLive);
-  if (live.hold) return;
-  // Cameras deliver about 30 frames a second; drawing more often (120 Hz
-  // screens) only costs battery.
-  if (now && now - live.last < 30) return;
-  live.last = now || 0;
+const live = { mode: 'native', raf: 0, vfc: 0, frames: 0 };
+function streamFitsViewfinder() {
+  const v = $('video');
+  return v.videoWidth > 0 && Math.abs(v.videoWidth / v.videoHeight - 3 / 4) < 0.02;
+}
+function paintCanvasFrame() {
   const v = $('video'), c = $('vfCanvas');
   const vw = v.videoWidth, vh = v.videoHeight;
-  if (!vw || !vh || v.readyState < 2) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  if (!vw || !vh || v.readyState < 2) return false;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
-  if (!W || !H) return;
+  if (!W || !H) return false;
   if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
   const ctx = c.getContext('2d');
   const k = viewCrop(vw, vh);
   ctx.save();
   if (facing === 'user') { ctx.translate(W, 0); ctx.scale(-1, 1); }
-  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, W, H);
   ctx.restore();
-  live.frames++;
+  return true;
 }
-function startLive() { if (!live.raf) live.raf = requestAnimationFrame(drawLive); }
-function stopLive(clear) {
-  cancelAnimationFrame(live.raf); live.raf = 0;
-  if (clear) { const c = $('vfCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+// Canvas mode only: draw each new camera frame (requestVideoFrameCallback
+// where available, so nothing is drawn twice).
+function canvasLoop() {
+  const v = $('video');
+  if (live.mode !== 'canvas') return;
+  if (paintCanvasFrame()) live.frames++;
+  if (v.requestVideoFrameCallback) live.vfc = v.requestVideoFrameCallback(canvasLoop);
+  else live.raf = requestAnimationFrame(canvasLoop);
 }
-// Resolves once the canvas has drawn real frames of the new stream.
-function liveReady() {
-  const start = live.frames;
+function stopCanvasLoop() {
+  const v = $('video');
+  if (live.vfc && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(live.vfc);
+  cancelAnimationFrame(live.raf);
+  live.vfc = 0; live.raf = 0;
+}
+// Native mode: mirroring and digital zoom are a GPU transform on the video.
+function applyLiveTransform() {
+  const z = digitalZoom(), m = facing === 'user' ? -1 : 1;
+  $('video').style.transform = (z !== 1 || m !== 1) ? 'scale(' + (z * m) + ',' + z + ')' : '';
+}
+function chooseLiveMode() {
+  const vf = $('vf');
+  const mode = streamFitsViewfinder() ? 'native' : 'canvas';
+  if (mode === live.mode && (mode === 'native' || live.vfc || live.raf)) return;
+  stopCanvasLoop();
+  live.mode = mode;
+  vf.classList.toggle('canvas-mode', mode === 'canvas');
+  if (mode === 'canvas') canvasLoop();
+  applyLiveTransform();
+}
+function videoReady(v) {
   return new Promise(resolve => {
-    const t0 = Date.now();
-    (function wait() {
-      if (live.frames - start >= 2 || Date.now() - t0 > 2500) resolve();
-      else setTimeout(wait, 30);
-    })();
+    const t = setTimeout(resolve, 2500);
+    const done = () => { clearTimeout(t); resolve(); };
+    if (v.readyState >= 2 && v.videoWidth) { setTimeout(done, 60); return; }
+    v.addEventListener('loadeddata', () => setTimeout(done, 60), { once: true });
   });
 }
-// Asks for the sensor's own 4:3 shape at a high resolution, so 1× shows the
-// full field of view like the native camera app (16:9 would crop the sensor).
+// 4:3 at a size phones stream smoothly (about 1920×1440); much larger
+// formats drop to a low frame rate on some phones.
 function videoConstraints() {
-  const base = { width: { ideal: 4032 }, height: { ideal: 3024 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 30 }, resizeMode: { ideal: 'none' } };
+  const base = { width: { ideal: 2560 }, height: { ideal: 1920 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 30 }, resizeMode: { ideal: 'none' } };
   return zoom.lens === 'ultra' && zoom.ultraId
     ? Object.assign({ deviceId: { exact: zoom.ultraId } }, base)
     : Object.assign({ facingMode: { ideal: facing } }, base);
@@ -1109,12 +1132,12 @@ async function startCamera() {
     $('camerrMsg').textContent = 'The camera only works over a secure https link. Open the app via the shared link.';
     err.classList.add('on'); return;
   }
-  // Like a native camera: on a fresh start the viewfinder stays black until
-  // the first frame is drawn; on a switch the last frame stays, blurred,
-  // until the new camera delivers.
+  // Like a native camera: a fresh start stays black until the image is
+  // ready; a switch freezes the last frame, blurred, until the new one is.
   const vf = $('vf');
-  const switching = !!stream;
-  if (switching) { live.hold = true; vf.classList.add('switching'); } else vf.classList.remove('live');
+  const switching = !!stream && $('video').videoWidth > 0;
+  stopCanvasLoop();
+  if (switching) { paintCanvasFrame(); vf.classList.add('switching'); } else vf.classList.remove('live');
   try {
     let newStream;
     try { newStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false }); }
@@ -1125,16 +1148,18 @@ async function startCamera() {
     }
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = newStream;
-    $('video').srcObject = stream;
+    const v = $('video');
+    v.srcObject = stream;
     $('screen-camera').classList.toggle('mirror', facing === 'user');
-    await $('video').play();
+    await v.play();
     if (zoom.lens === 'main') await detectUltraWide();
     setupZoom();
-    live.hold = false;
-    startLive();
-    await liveReady();
+    await videoReady(v);
+    live.mode = '';
+    chooseLiveMode();
     vf.classList.remove('switching');
     vf.classList.add('live');
+    layoutCamera();
     keepAwake(true);
     syncGridLevel();
     err.classList.remove('on');
@@ -1144,19 +1169,55 @@ async function startCamera() {
       ? 'Allow camera access in your browser and try again.'
       : (n === 'NotFoundError') ? 'No usable camera found, or it is in use by another app.'
       : (e && e.message) || 'Unknown error.';
-    live.hold = false;
     vf.classList.remove('switching');
     err.classList.add('on');
   }
 }
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  stopLive(true);
-  $('vf').classList.remove('live', 'switching');
+  stopCanvasLoop();
+  const c = $('vfCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  $('vf').classList.remove('live', 'switching', 'canvas-mode');
   keepAwake(false);
   zoom.track = null;
   cancelCountdown();
   setLevel(false);
+}
+
+/* Layout (DESIGN.md §14). T = top bar, V = full-width 3:4 viewfinder,
+   B = modes + shutter row, H = screen height.
+   - T + V + B fits: stacked, nothing overlaps (installed app, tall phones).
+   - Otherwise the viewfinder sits at the bottom of the screen and the
+     modes + shutter row lie on its lower edge. The top bar stays on black
+     when there is room above the picture, and lies on the picture when there
+     is none. If it would end up half on the picture, the picture moves to
+     the top and a thin black strip stays below the controls instead.
+   Zoom steps, overlay slider and messages always sit inside the picture,
+   just clear of whatever lies on top of it. Nothing is ever half on the
+   picture and half on the black. */
+function layoutCamera() {
+  const cam = $('screen-camera');
+  if (!cam.classList.contains('active')) return;
+  cam.classList.remove('cam-overlay');
+  const H = cam.clientHeight;
+  const T = cam.querySelector('.cam-top').offsetHeight;
+  const B = cam.querySelector('.cam-bottom').offsetHeight;
+  const V = $('vf').offsetWidth * 4 / 3;
+  let topCover = 0, bottomCover = 0;
+  if (T + V + B > H + 1) {
+    let vfTop = H - V, ctlBottom = 0;
+    if (vfTop > 0 && vfTop < T) { vfTop = 0; ctlBottom = H - V; }
+    cam.classList.add('cam-overlay');
+    cam.style.setProperty('--vf-top', vfTop + 'px');
+    cam.style.setProperty('--ctl-bottom', ctlBottom + 'px');
+    // Measure the controls again: on the picture they carry a taller fade.
+    const ctl = cam.querySelector('.cam-bottom'), content = ctl.querySelector('.mode-tabs:not([hidden])') || ctl.querySelector('.cam-controls');
+    const ctlTop = content.getBoundingClientRect().top - cam.getBoundingClientRect().top;
+    topCover = Math.max(0, T - vfTop);
+    bottomCover = Math.max(0, (vfTop + V) - ctlTop);
+  }
+  cam.style.setProperty('--vf-top-pad', (topCover + 12) + 'px');
+  cam.style.setProperty('--vf-bottom-pad', (bottomCover + 12) + 'px');
 }
 
 function toBlobP(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
@@ -1199,13 +1260,13 @@ async function capturePhoto() {
   camBadge('Photo ' + count + ' saved');
 }
 
-function camBadge(text) {
+function camBadge(text, ms) {
   const b = $('cbadge');
   b.textContent = text;
   b.hidden = false;
   b.style.animation = 'none';
   requestAnimationFrame(() => { b.style.animation = 'badgePop .3s ease'; });
-  clearTimeout(window._bt); window._bt = setTimeout(() => { b.hidden = true; }, 2400);
+  clearTimeout(window._bt); window._bt = setTimeout(() => { b.hidden = true; }, ms || 2400);
 }
 function alBadge(text) {
   const b = $('alBadge');
@@ -2606,6 +2667,10 @@ function wire() {
     saveCamPrefs();
   });
   wireViewfinderPinch();
+  // A rotated phone or a resized window can change the stream shape and the
+  // room on screen: re-pick the live mode and the layout.
+  $('video').addEventListener('resize', () => { if (state.screen === 'camera' && stream) chooseLiveMode(); });
+  window.addEventListener('resize', layoutCamera);
 
   $('fps').addEventListener('input', function () {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
