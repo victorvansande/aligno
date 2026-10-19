@@ -79,6 +79,7 @@ Alles op een raster van 4px.
 Regels:
 - Elk scherm heeft 16px marge links en rechts. Zonder uitzondering.
 - Een sectielabel staat 12px boven zijn inhoud en 24px onder het vorige blok.
+- **Twee blokken zonder sectielabel ertussen** (bv. een segment en een kaart) krijgen ook 24px. Blokken raken elkaar nooit. Dit regelt één CSS-regel in sectie 3; een nieuw bloktype voeg je daar toe.
 - Lijsten van kaarten en rijen: 12px ertussen. Tegels en miniaturen: 8px.
 - Knoppen naast elkaar: 12px ertussen. Knoppen onder elkaar: 12px.
 
@@ -156,6 +157,7 @@ Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties
 | Segment | `.seg` / `.cam-seg` | 44px, `--r-md`, 4px binnenmarge, knoppen `--r-sm` |
 | Schakelaar | `.tgl` | 46×28, aan = `--accent` |
 | Invoerveld | `.field` | 52px, `--r-md`, rand `--line-strong`, focus = rand `--accent` + zachte ring |
+| Veldlabel | `.field-lbl` | `--fs-label` 600 in `--text-2`, 8px boven het veld. **Elk invoerveld heeft een zichtbaar label**; de placeholder toont alleen een voorbeeld ("e.g. ..."). Uitzondering: een sheet waarvan de titel het veld al benoemt (Rename project, Photo date). |
 | Sheet | `.modal-bg > .sheet` | Glas, `--r-xl` bovenaan, 20px marge, grijplijntje, titel `--fs-title` |
 | Paneel | `.panel` | `--surface-2`, `--r-lg`, 16px marge |
 | Sectielabel | `.sectlbl` | `--fs-label`, 600, `--text-3` |
@@ -187,7 +189,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - Scherm blijft aan terwijl de camera open is.
 - Respecteer de veilige zones (notch, home-balk) met `env(safe-area-inset-*)`.
 - Terugknop van Android en Escape sluiten altijd het bovenste ding (sheet, viewer, scherm).
-- Op iPhone in de browser toont Aligno hoe je hem aan je beginscherm toevoegt.
+- **Installeren**: biedt de browser een eigen installatievenster (Chrome en Edge op Android en computer), dan gebruiken we dat. Anders toont de installknop stappen voor die specifieke browser en dat systeem (Safari, Chrome, Firefox, Edge op iPhone; Chrome, Samsung Internet, Firefox, Edge op Android; Chrome, Edge, Safari op computer; apps zoals Instagram: eerst openen in de browser). Kan een browser niet installeren, dan geen installknop. Nieuwe browser of gewijzigde menu's: `installGuide()` in `app.js` aanpassen.
 
 ## 13. Code
 
@@ -221,7 +223,9 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 
 ## 14. Camera en zoeker
 
-- **Opbouw, van boven naar onder**: zwarte balk met sluiten (links), projectnaam (midden) en maximaal drie tools als losse iconen (raster, zelfontspanner, galerij). Dan de **zoeker in 3:4**, zo groot als past. Daaronder: de schuifregelaar voor de overlay, de modustabs (Fade, Edges, Blend), één regel uitleg, en de bedieningsrij (laatste foto links, sluiter in het midden, camera wisselen rechts).
+- **Opbouw, van boven naar onder**: zwarte balk met sluiten (links), projectnaam (midden) en maximaal drie tools als losse iconen (raster, zelfontspanner, galerij). Dan de **zoeker in 3:4, altijd over de volle breedte** (nooit zwarte randen links en rechts). Daaronder: de zoomstappen, de schuifregelaar voor de overlay, de modustabs (Fade, Edges, Blend), één regel uitleg, en de bedieningsrij (laatste foto links, sluiter in het midden, camera wisselen rechts).
+- **Is het scherm te kort** (bv. met browserbalken), dan liggen de bedieningselementen over de onderrand van de zoeker, op een verloop naar zwart, zoals in de camera-apps van iOS en Android.
+- **Het live beeld wordt door de app zelf op maat gezet** zodat het de zoeker vult (`fitVideo()`); vertrouw nooit alleen op `object-fit` voor een camerastream, sommige browsers negeren dat.
 - **Wat je ziet is wat je bewaart.** De foto wordt exact zo bijgesneden als de zoeker hem toont (3:4, plus eventuele digitale zoom). Raster, waterpas en overlay liggen in de zoeker, niet over de knoppen.
 - **Zoom gaat met vaste stappen**: 0.5×, 1×, 2×, 3×, 5×, 10×, voor zover het toestel ze kan. Geen schuifregelaar. Knijpen in de zoeker mag voor tussenwaarden; dicht bij een stap klikt de zoom erop vast (binnen 4%). De actieve stap toont de exacte waarde (bv. 2.4×).
 - **Herhaalbaarheid gaat voor alles**: elke foto bewaart zijn zoom, de camera opent op de zoom van de vorige foto, en zodra je daarvan afwijkt verschijnt een knop met die waarde om met één tik terug te keren.
@@ -243,7 +247,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 ## 16. Tips, meldingen en pop-ups
 
 - **Nooit vanzelf een sheet of venster openen**, behalve een bevestiging die de gebruiker zelf uitlokte (verwijderen, herstellen). Uitleg staat in Instellingen ("How aligning works") en op de startpagina.
-- **Maximaal één tip tegelijk**, en nooit over knoppen of over het midden van de zoeker. Tips staan bovenaan (uitlijner) of onderaan in de zoeker boven de zoomstappen (camera).
+- **Maximaal één tip tegelijk**, en nooit over knoppen of over het midden van de zoeker. Tips staan bovenaan: in de uitlijner onder de topbalk, in de camera bovenaan de zoeker.
 - **Een tip verdwijnt met één tik en komt daarna nooit meer terug** (onthouden in `localStorage`, sleutel `aligno_hint_*`).
 - De uitlegregel onder de modustabs verschijnt bij de eerste drie bezoeken en bij elke moduswissel, en vervaagt na 4 seconden.
 - **Feedback na een actie** (foto bewaard, zoom hersteld, raster aan) is een korte pil die na 2,4 s verdwijnt. Geen knop, geen tekst van meer dan één zin.

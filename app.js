@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v30';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -975,7 +975,17 @@ async function detectUltraWide() {
 function digitalZoom() { return zoom.lens === 'ultra' || zoom.hw ? 1 : zoom.cur; }
 function applyVideoTransform() {
   const z = digitalZoom(), m = facing === 'user' ? -1 : 1;
-  $('video').style.transform = (z !== 1 || m !== 1) ? 'scale(' + (z * m) + ',' + z + ')' : '';
+  $('video').style.transform = 'translate(-50%,-50%)' + ((z !== 1 || m !== 1) ? ' scale(' + (z * m) + ',' + z + ')' : '');
+}
+/* Sizes the video to cover the 3:4 viewfinder by hand. Some browsers (iOS)
+   ignore object-fit on a live camera stream and letterbox it instead. */
+function fitVideo() {
+  const v = $('video'), box = $('vf');
+  const vw = v.videoWidth, vh = v.videoHeight, bw = box.clientWidth, bh = box.clientHeight;
+  if (!vw || !vh || !bw || !bh) return;
+  const s = Math.max(bw / vw, bh / vh);
+  v.style.width = Math.ceil(vw * s) + 'px';
+  v.style.height = Math.ceil(vh * s) + 'px';
 }
 async function setZoom(v, quiet) {
   if (zoom.switching) return;
@@ -1042,8 +1052,10 @@ async function startCamera() {
     await $('video').play();
     if (zoom.lens === 'main') await detectUltraWide();
     setupZoom();
+    fitVideo();
     applyVideoTransform();
     await firstFrame($('video'));
+    fitVideo();
     vf.classList.remove('switching');
     vf.classList.add('live');
     keepAwake(true);
@@ -2528,6 +2540,10 @@ function wire() {
     saveCamPrefs();
   });
   wireViewfinderPinch();
+  $('video').addEventListener('loadedmetadata', fitVideo);
+  $('video').addEventListener('resize', fitVideo);
+  if (window.ResizeObserver) new ResizeObserver(fitVideo).observe($('vf'));
+  else window.addEventListener('resize', fitVideo);
 
   $('fps').addEventListener('input', function () {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
@@ -2609,13 +2625,105 @@ function wire() {
   window.addEventListener('appinstalled', () => { deferred = null; $('installBtn').hidden = true; });
   $('installBtn').addEventListener('click', async () => {
     if (deferred) { deferred.prompt(); await deferred.userChoice; deferred = null; $('installBtn').hidden = true; return; }
-    $('iosInstallModal').classList.add('on');
+    openInstallGuide();
   });
-  $('iosInstallOk').addEventListener('click', () => $('iosInstallModal').classList.remove('on'));
-  $('iosInstallModal').addEventListener('click', e => { if (e.target === $('iosInstallModal')) $('iosInstallModal').classList.remove('on'); });
-  if (IS_IOS && !isStandalone()) $('installBtn').hidden = false;
+  $('installOk').addEventListener('click', () => $('installModal').classList.remove('on'));
+  $('installModal').addEventListener('click', e => { if (e.target === $('installModal')) $('installModal').classList.remove('on'); });
+  if (!isStandalone() && installGuide()) $('installBtn').hidden = false;
 
   wireAppFeel();
+}
+
+/* --- Install guide: the steps differ per browser and system, so they are
+   picked from the user agent. Where the browser offers its own install
+   prompt (Chrome and Edge on Android and computers), that prompt is used
+   instead. Browsers that can't install web apps get no install button. --- */
+const ICON_SHARE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+const ICON_DOTS_V = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-label="menu"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>';
+const ICON_DOTS_H = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-label="menu"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+const ICON_LINES = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="menu"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+
+function installGuide() {
+  const ua = navigator.userAgent;
+  const android = /Android/i.test(ua);
+  const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (ios) {
+    if (/FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|LinkedInApp|Twitter/i.test(ua)) {
+      return { title: 'Open Aligno in your browser first', steps: [
+        'Tap ' + ICON_DOTS_H + ' or the browser icon in this app.',
+        'Choose <b>Open in Safari</b> (or your browser).',
+        'Then come back here and tap the install button again.'] };
+    }
+    if (/CriOS/i.test(ua)) {
+      return { title: 'Add Aligno to your Home Screen', steps: [
+        'Tap ' + ICON_SHARE + ' in the address bar.',
+        'Tap <b>Add to Home Screen</b>. You may need to scroll down.',
+        'Tap <b>Add</b>.'] };
+    }
+    if (/FxiOS/i.test(ua)) {
+      return { title: 'Add Aligno to your Home Screen', steps: [
+        'Tap the menu ' + ICON_LINES + ' at the bottom.',
+        'Tap <b>Share</b>, then <b>Add to Home Screen</b>.',
+        'Tap <b>Add</b>.'] };
+    }
+    if (/EdgiOS|OPiOS|OPT\//i.test(ua)) {
+      return { title: 'Add Aligno to your Home Screen', steps: [
+        'Open the menu ' + ICON_DOTS_H + ' and tap <b>Share</b> ' + ICON_SHARE + '.',
+        'Tap <b>Add to Home Screen</b>.',
+        'Tap <b>Add</b>.'] };
+    }
+    return { title: 'Add Aligno to your Home Screen', steps: [
+      'Tap ' + ICON_SHARE + ' in the Safari toolbar.',
+      'Scroll down and tap <b>Add to Home Screen</b>.',
+      'Tap <b>Add</b>.'] };
+  }
+  if (android) {
+    if (/SamsungBrowser/i.test(ua)) {
+      return { title: 'Add Aligno to your Home screen', steps: [
+        'Tap the menu ' + ICON_LINES + ' at the bottom.',
+        'Tap <b>Add page to</b>, then <b>Home screen</b>.',
+        'Tap <b>Add</b>.'] };
+    }
+    if (/Firefox/i.test(ua)) {
+      return { title: 'Add Aligno to your Home screen', steps: [
+        'Tap the menu ' + ICON_DOTS_V + '.',
+        'Tap <b>Install</b> or <b>Add to Home screen</b>.',
+        'Confirm with <b>Add</b>.'] };
+    }
+    if (/EdgA/i.test(ua)) {
+      return { title: 'Add Aligno to your Home screen', steps: [
+        'Tap the menu ' + ICON_DOTS_H + ' at the bottom.',
+        'Tap <b>Add to phone</b>.',
+        'Tap <b>Install</b>.'] };
+    }
+    return { title: 'Add Aligno to your Home screen', steps: [
+      'Tap the menu ' + ICON_DOTS_V + ' at the top right.',
+      'Tap <b>Install app</b> or <b>Add to Home screen</b>.',
+      'Tap <b>Install</b>.'] };
+  }
+  if (/Edg\//i.test(ua)) {
+    return { title: 'Install Aligno', steps: [
+      'Open the menu ' + ICON_DOTS_H + ' at the top right.',
+      'Choose <b>Apps</b>, then <b>Install Aligno</b>.'] };
+  }
+  if (/Chrome\//i.test(ua) && !/OPR\//i.test(ua)) {
+    return { title: 'Install Aligno', steps: [
+      'Click the install icon at the right of the address bar.',
+      'Or open the menu ' + ICON_DOTS_V + ' and choose <b>Install Aligno</b>.'] };
+  }
+  if (/Macintosh/i.test(ua) && /Version\/\d+.*Safari/i.test(ua)) {
+    return { title: 'Add Aligno to your Dock', steps: [
+      'In the menu bar, choose <b>File</b>.',
+      'Choose <b>Add to Dock</b>.'] };
+  }
+  return null;
+}
+function openInstallGuide() {
+  const g = installGuide();
+  if (!g) return;
+  $('installTitle').textContent = g.title;
+  $('installSteps').innerHTML = g.steps.map(s => '<li>' + s + '</li>').join('');
+  $('installModal').classList.add('on');
 }
 
 /* --- App feel: on the home screen Aligno behaves like a native app. No pinch
