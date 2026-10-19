@@ -53,31 +53,54 @@ function sample(img, x, y) {
   return (d[i] * (1 - fx) + d[i + 1] * fx) * (1 - fy) + (d[i + w] * (1 - fx) + d[i + w + 1] * fx) * fy;
 }
 
-// NCC between the reference and the other picture seen through transform p.
-// Returns -1 when less than half of the reference is covered.
-function score(R, M, p, st) {
+/* NCC between the reference and the other picture seen through transform p.
+   p can include perspective (px, py): v = (a·u + b) / (1 + px·ux + py·uy),
+   for a phone held at a slightly different tilt. Returns -1 when less than
+   half of the reference is covered.
+   trim: ignore the 20% of pixels that fit worst. What really changed between
+   two photos (the plant that grew, a chair that moved) then no longer pulls
+   the answer towards itself; the unchanged surroundings decide. */
+const BUF_A = new Float32Array(128 * 171), BUF_B = new Float32Array(128 * 171), HIST = new Uint32Array(64);
+function ncc(n, sa, sb, saa, sbb, sab) {
+  const va = saa - sa * sa / n, vb = sbb - sb * sb / n;
+  if (va <= 1e-6 || vb <= 1e-6) return -1;
+  return (sab - sa * sb / n) / Math.sqrt(va * vb);
+}
+function score(R, M, p, st, trim) {
   st = st || 1;
   const { w, h, d } = R, mw = M.w, mh = M.h;
-  const ar = p.s * Math.cos(p.th), ai = p.s * Math.sin(p.th);
+  const ar = p.s * Math.cos(p.th), ai = p.s * Math.sin(p.th), qx = p.px || 0, qy = p.py || 0;
   let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, total = 0;
-  // st = 2 looks at every other pixel in a checkerboard: four times faster on
-  // the largest level, and still thousands of samples.
+  // st = 2 looks at every other pixel in a checkerboard: half the work, and
+  // on the largest level still thousands of samples.
   for (let y = 2; y < h - 2; y += 1) {
     const uy = (y + 0.5) / w - h / (2 * w);
     for (let x = 2 + (st > 1 ? y & 1 : 0); x < w - 2; x += st) {
       total++;
-      const ux = (x + 0.5) / w - 0.5;
-      const vx = ar * ux - ai * uy + p.tx, vy = ai * ux + ar * uy + p.ty;
+      const ux = (x + 0.5) / w - 0.5, den = 1 + qx * ux + qy * uy;
+      const vx = (ar * ux - ai * uy + p.tx) / den, vy = (ai * ux + ar * uy + p.ty) / den;
       const b = sample(M, (vx + 0.5) * mw - 0.5, vy * mw + mh / 2 - 0.5);
       if (b !== b) continue;
       const a = d[y * w + x];
+      if (trim) { BUF_A[n] = a; BUF_B[n] = b; }
       n++; sa += a; sb += b; saa += a * a; sbb += b * b; sab += a * b;
     }
   }
   if (n < total * 0.5) return -1;
-  const va = saa - sa * sa / n, vb = sbb - sb * sb / n;
-  if (va <= 1e-6 || vb <= 1e-6) return -1;
-  return (sab - sa * sb / n) / Math.sqrt(va * vb);
+  if (!trim) return ncc(n, sa, sb, saa, sbb, sab);
+  // Both as z-scores; the squared difference says how badly a pixel fits.
+  const ma = sa / n, mb = sb / n, da = Math.sqrt(Math.max(1e-9, saa / n - ma * ma)), db = Math.sqrt(Math.max(1e-9, sbb / n - mb * mb));
+  HIST.fill(0);
+  for (let i = 0; i < n; i++) { const e = (BUF_A[i] - ma) / da - (BUF_B[i] - mb) / db; HIST[Math.min(63, (e * e * 4) | 0)]++; }
+  let cut = 63, acc = 0;
+  for (let k = 0; k < 64; k++) { acc += HIST[k]; if (acc >= n * 0.8) { cut = k; break; } }
+  let m = 0; sa = sb = saa = sbb = sab = 0;
+  for (let i = 0; i < n; i++) {
+    const a = BUF_A[i], b = BUF_B[i], e = (a - ma) / da - (b - mb) / db;
+    if (((e * e * 4) | 0) > cut) continue;
+    m++; sa += a; sb += b; saa += a * a; sbb += b * b; sab += a * b;
+  }
+  return m < 50 ? -1 : ncc(m, sa, sb, saa, sbb, sab);
 }
 
 /* Coarse search at 32 px wide: every scale and turn on a grid; for each, the
@@ -136,22 +159,25 @@ function coarse(R, M, o) {
 }
 
 // Fine-tuning on a larger level: nudge each value while the match improves.
-// `px` is how far off the start may be, in pixels of this level.
-function refine(R, M, p, px, sp) {
-  p = { s: p.s, th: p.th, tx: p.tx, ty: p.ty };
-  let best = score(R, M, p, sp);
+// `px` is how far off the start may be, in pixels of this level. With
+// persp, the two perspective values are tuned as well.
+function refine(R, M, p, px, sp, trim, persp, maxIt) {
+  p = { s: p.s, th: p.th, tx: p.tx, ty: p.ty, px: p.px || 0, py: p.py || 0 };
+  let best = score(R, M, p, sp, trim);
   const f = px / R.w * 2; // pixel at the edge ≈ half the width × change in scale or turn
-  let st = { s: f, th: f, tx: px / R.w, ty: px / R.w };
-  for (let it = 0; it < 40 && st.tx > 0.2 / R.w; it++) {
+  let st = { s: f, th: f, tx: px / R.w, ty: px / R.w, px: f * 2, py: f * 2 };
+  const keys = persp ? ['tx', 'ty', 's', 'th', 'px', 'py'] : ['tx', 'ty', 's', 'th'];
+  for (let it = 0; it < (maxIt || (persp ? 60 : 40)) && st.tx > 0.2 / R.w; it++) {
     let moved = false;
-    for (const k of ['tx', 'ty', 's', 'th']) {
+    for (const k of keys) {
       for (const sg of [1, -1]) {
         const q = Object.assign({}, p); q[k] += sg * st[k];
-        const v = score(R, M, q, sp);
+        if (Math.abs(q.px) > 0.3 || Math.abs(q.py) > 0.3) continue;
+        const v = score(R, M, q, sp, trim);
         if (v > best) { best = v; p = q; moved = true; break; }
       }
     }
-    if (!moved) { st = { s: st.s / 2, th: st.th / 2, tx: st.tx / 2, ty: st.ty / 2 }; }
+    if (!moved) { const h = {}; for (const k in st) h[k] = st[k] / 2; st = h; }
   }
   return { p, v: best };
 }
@@ -190,18 +216,39 @@ function estimate(R, M, o) {
   }
   // ...each fine-tuned on the next level. Ones that end up in the same place
   // count once; the margin between the best and the next is "distinct".
+  // (Always on all pixels: trimming makes a wrong answer look better too,
+  // which would hide how clear the best one is. Trim only for the final fit.)
   const tuned = picks.map(c => Object.assign(refine(R[1], M[1], c, 1.5), { edge: c.edge }));
   tuned.sort((a, b) => b.v - a.v);
   const best = tuned[0];
   const rival = tuned.slice(1).find(t => apart(t.p, best.p) > 0.04);
   const distinct = best.v - (rival ? Math.max(0, rival.v) : 0);
-  const fin = refine(R[2], M[2], best.p, 1, 2);
+  let fin = refine(R[2], M[2], refine(R[1], M[1], best.p, 1, 1, o.trim).p, 1, 2, o.trim);
+  let v = score(R[2], M[2], fin.p, 2);
+  // Perspective (Stabilize): first roughly on 64 px, then fine. Only kept
+  // when it clearly fits better, so a scene with depth is not bent to fit.
+  if (o.persp && v < 0.95) { // already a near-perfect fit: no perspective to find
+    // Perspective and distance pull on each other, so nudging one value at a
+    // time gets stuck. Start from a grid of perspectives, let shift, turn and
+    // scale settle for each, and continue from the best.
+    let start = null;
+    for (const qx of [-0.07, 0, 0.07]) {
+      for (const qy of [-0.07, 0, 0.07]) {
+        const r1 = refine(R[1], M[1], Object.assign({}, fin.p, { px: qx, py: qy }), 1, 2, false, false, 14);
+        if (!start || r1.v > start.v) start = r1;
+      }
+    }
+    const pf = refine(R[2], M[2], refine(R[1], M[1], start.p, 1, 1, o.trim, true).p, 1, 2, o.trim, true);
+    const pv = score(R[2], M[2], pf.p, 2);
+    if (pv > v + 0.005) { fin = pf; v = pv; }
+  }
   // At the limit of what was searched, the real answer may lie beyond it.
   const p = fin.p, K = Math.max(1, Math.round(o.thMax / 2.5)) * 2.5;
   const ar = Math.cos(-p.th) / p.s, ai = Math.sin(-p.th) / p.s;
   const shiftPx = Math.max(Math.abs(ar * p.tx - ai * p.ty), Math.abs(ai * p.tx + ar * p.ty)) * R[0].w;
   const edge = p.s <= o.sMin * 1.01 || p.s >= o.sMax / 1.01 || Math.abs(p.th) * 180 / Math.PI >= K - 0.5 || shiftPx >= o.shift - 0.5;
-  return { ok: true, s: p.s, th: p.th, tx: p.tx, ty: p.ty, v: fin.v, id, distinct, edge, tex, ms: Date.now() - t0, coarseMs: t1 - t0 };
+  // v (the fit used to judge certainty) is always measured on all pixels.
+  return { ok: true, s: p.s, th: p.th, tx: p.tx, ty: p.ty, px: p.px || 0, py: p.py || 0, v, id, distinct, edge, tex, ms: Date.now() - t0, coarseMs: t1 - t0 };
 }
 
 self.onmessage = (e) => {

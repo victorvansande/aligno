@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -818,7 +818,7 @@ function loadAlignRef() {
 function alignTick() {
   const ring = $('alignRing'), v = $('video');
   const active = state.screen === 'camera' && camHasOverlay && !!stream && v.videoWidth > 0 && !document.hidden;
-  if (!active) { ring.classList.remove('on', 'ok'); align.ema = 0; align.ok = false; return; }
+  if (!active) { ring.classList.remove('on', 'ok'); setShutterScore(null); align.ema = 0; align.ok = false; return; }
   loadAlignRef();
   if (!align.ref || align.refUrl !== overlayRaw) return;
   let raw;
@@ -839,21 +839,50 @@ function alignTick() {
   ring.querySelector('circle').style.strokeDashoffset = String(100 - fill * 100);
   ring.classList.add('on');
   ring.classList.toggle('ok', ok);
-  $('shot').setAttribute('aria-label', ok ? 'Take photo, lined up with your last photo' : 'Take photo');
+  // Inside the shutter: how far along you are, a check once it lines up.
+  const pct = Math.round(fill * 100);
+  setShutterScore(ok ? 'ok' : pct + '%');
+  $('shot').setAttribute('aria-label', ok ? 'Take photo, lined up with your last photo' : 'Take photo, lined up ' + pct + '%');
+  // The first two times, say once what the ring means.
+  if (!align.hinted && $('cbadge').hidden) {
+    align.hinted = true;
+    let n = 0; try { n = +localStorage.getItem('aligno_hint_ring') || 0; } catch (e) {}
+    if (n < 2) {
+      try { localStorage.setItem('aligno_hint_ring', String(n + 1)); } catch (e) {}
+      camBadge('The ring shows how well you line up with your last photo', 4000);
+    }
+  }
+}
+const CHECK_ICON = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function setShutterScore(v) {
+  const i = $('shot').querySelector('i');
+  if (i._v === v) return;
+  i._v = v;
+  i.classList.toggle('ok', v === 'ok');
+  i.innerHTML = v === 'ok' ? CHECK_ICON : (v || '');
 }
 function startAlignScore() { stopAlignScore(); align.timer = setInterval(alignTick, 200); guide.timer = setInterval(guideTick, 350); }
 function stopAlignScore() {
   clearInterval(align.timer); align.timer = 0; align.ema = 0; align.ok = false; $('alignRing').classList.remove('on', 'ok');
+  setShutterScore(null);
   clearInterval(guide.timer); guide.timer = 0; showGuide(null);
 }
 
 /* Live guide: says what to do to line up with the last photo ("Step back",
-   "Move left", "Turn clockwise"), one thing at a time, the biggest first.
-   It only speaks when the measurement is certain (see certain()) and the same
-   advice comes out twice in a row; otherwise it shows nothing. Silent once
-   the shutter ring is green. A tap hides it until the camera opens again. */
+   "Move left", "Tilt right"), one thing at a time, the biggest first.
+   Two sources, both only used when they are sure:
+   - the motion sensor, compared with how the phone was tilted for the last
+     photo: "Tilt left/right" (turned) and "Tilt up/down" (aimed higher or
+     lower). A sensor reading is a fact, so this works on any scene.
+   - the picture, compared with the last photo (see certain()): distance,
+     sideways, and up/down. When the sensor says the aim is right, up/down
+     means really moving the phone ("Move up"); when it is not, the tilt is
+     the cause and "Tilt up/down" is said instead.
+   Advice appears only when it comes out twice in a row; silent once the
+   shutter ring is green. A tap hides it until the camera opens again. */
 const LIVE_OPTS = { sMin: 0.8, sMax: 1.25, thMax: 10, shift: 10 };
-const guide = { timer: 0, busy: false, refUrl: null, cand: null, streak: 0, shown: null, miss: 0, off: false, track: null, n: 0 };
+const guide = { timer: 0, busy: false, refUrl: null, cand: null, streak: 0, shown: null, miss: 0, off: false, track: null, n: 0, refTilt: null };
+const TILT_ROLL = 1.5, TILT_PITCH = 3; // degrees that count as "off"
 const GUIDE_ARROW = d => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
 const GUIDES = {
   back: { t: 'Step back', i: GUIDE_ARROW('<path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5M9 5v4H5M15 5v4h4M9 19v-4H5M15 19v-4h4"/>') },
@@ -862,8 +891,10 @@ const GUIDES = {
   right: { t: 'Move right', i: GUIDE_ARROW('<path d="M5 12h14M13 6l6 6-6 6"/>') },
   up: { t: 'Move up', i: GUIDE_ARROW('<path d="M12 19V5M6 11l6-6 6 6"/>') },
   down: { t: 'Move down', i: GUIDE_ARROW('<path d="M12 5v14M6 13l6 6 6-6"/>') },
-  cw: { t: 'Turn clockwise', i: GUIDE_ARROW('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>') },
-  ccw: { t: 'Turn counterclockwise', i: GUIDE_ARROW('<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/>') }
+  tiltR: { t: 'Tilt right', i: GUIDE_ARROW('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>') },
+  tiltL: { t: 'Tilt left', i: GUIDE_ARROW('<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/>') },
+  tiltU: { t: 'Tilt up', i: GUIDE_ARROW('<path d="M4 19h16"/><path d="M12 16V5M8 9l4-4 4 4"/>') },
+  tiltD: { t: 'Tilt down', i: GUIDE_ARROW('<path d="M4 5h16"/><path d="M12 8v11M8 15l4 4 4-4"/>') }
 };
 function showGuide(k) {
   const el = $('guide');
@@ -874,24 +905,49 @@ function showGuide(k) {
   el.setAttribute('aria-label', GUIDES[k].t + '. Tap to hide');
   el.hidden = false;
 }
+// What the motion sensor says, compared with the last photo. Each entry has a
+// weight e: 1 means just off enough to mention.
+function tiltAdvice() {
+  const ref = guide.refTilt, now = phoneTilt(), out = { roll: null, pitch: null };
+  if (!ref || !now) return out;
+  if (ref.roll !== null && ref.roll !== undefined && now.roll !== null) {
+    let d = now.roll - ref.roll;
+    d = ((d + 540) % 360) - 180;
+    // Turned further clockwise than last time: tilt back to the left.
+    if (Math.abs(d) < 30) out.roll = { k: d < 0 ? 'tiltL' : 'tiltR', e: Math.abs(d) / TILT_ROLL };
+  }
+  if (typeof ref.pitch === 'number') {
+    const d = now.pitch - ref.pitch;
+    // Aiming lower than last time: tilt up.
+    if (Math.abs(d) < 40) out.pitch = { k: d > 0 ? 'tiltU' : 'tiltD', e: Math.abs(d) / TILT_PITCH };
+  }
+  return out;
+}
 // Which single piece of advice fits best; null when it is close enough.
+// r is the picture measurement, or null when that was not certain.
 function guideAdvice(r) {
-  let tx = r.tx, th = r.th;
-  // The front camera is shown mirrored: left and right swap on screen.
-  if (facing === 'user') { tx = -tx; th = -th; }
-  const opts = [
-    { k: r.s > 1 ? 'back' : 'closer', e: Math.abs(Math.log(r.s)) / 0.05 },
-    { k: th > 0 ? 'cw' : 'ccw', e: Math.abs(th) * 180 / Math.PI / 2.5 },
-    { k: tx > 0 ? 'right' : 'left', e: Math.abs(tx) / 0.04 },
-    { k: r.ty > 0 ? 'down' : 'up', e: Math.abs(r.ty) / 0.04 }
-  ].sort((a, b) => b.e - a.e);
-  return opts[0].e >= 1 ? opts[0].k : null;
+  const t = tiltAdvice(), opts = [];
+  if (t.roll) opts.push(t.roll);
+  if (t.pitch) opts.push(t.pitch);
+  if (r) {
+    let tx = r.tx, th = r.th;
+    // The front camera is shown mirrored: left and right swap on screen.
+    if (facing === 'user') { tx = -tx; th = -th; }
+    opts.push({ k: r.s > 1 ? 'back' : 'closer', e: Math.abs(Math.log(r.s)) / 0.05 });
+    opts.push({ k: tx > 0 ? 'right' : 'left', e: Math.abs(tx) / 0.04 });
+    // The sensor knows turning better than the picture; use the picture only without it.
+    if (!t.roll) opts.push({ k: th > 0 ? 'tiltR' : 'tiltL', e: Math.abs(th) * 180 / Math.PI / 2.5 });
+    // Up or down in the picture: a tilt when the sensor says so, else really move.
+    if (!(t.pitch && t.pitch.e >= 1)) opts.push({ k: r.ty > 0 ? 'down' : 'up', e: Math.abs(r.ty) / 0.04 });
+  }
+  opts.sort((a, b) => b.e - a.e);
+  return opts.length && opts[0].e >= 1 ? opts[0].k : null;
 }
 function guideResult(r) {
   if (!guide.timer) return;
   const sure = certain(r, 0.6);
   guide.track = sure ? r : null;
-  const k = sure ? guideAdvice(r) : null;
+  const k = guideAdvice(sure ? r : null);
   if (!k) {
     guide.cand = null; guide.streak = 0;
     // Let go only after two quiet results, so the pill does not flicker.
@@ -953,6 +1009,7 @@ async function loadLibraryOverlay(file) {
     r.readAsDataURL(file);
   });
   setOverlay(url, 'library');
+  guide.refTilt = null; // unknown for a gallery photo
   camBadge('Aligning to your library photo');
 }
 async function resetOverlayToLast() {
@@ -961,6 +1018,7 @@ async function resetOverlayToLast() {
   const photos = await photosOf(p);
   const last = photos.length ? photos[photos.length - 1] : null;
   if (last) setOverlay(urlFor(last, 'full'), 'project'); else hideOverlay();
+  guide.refTilt = last && last.tilt || null;
 }
 async function applyOverlay() {
   const ov = $('overlay');
@@ -1099,11 +1157,32 @@ async function fireFlash() {
    tilted, so every shot is taken at the same angle. Shown with the grid. */
 let levelOn = false, levelRaf = 0, levelG = null;
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+/* The motion sensor runs while the camera is open: for the level, and to
+   remember how the phone was tilted for every photo (so the guide can say
+   "Tilt left" or "Tilt up" next time). motion.g is smoothed, so a shaking
+   hand does not count as tilting. */
+const motion = { on: false, g: null, t: 0 };
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
   if (!g || g.x === null || g.y === null) return;
   levelG = IS_IOS ? { x: -g.x, y: -g.y, z: -(g.z || 0) } : { x: g.x, y: g.y, z: g.z || 0 };
-  if (!levelRaf) levelRaf = requestAnimationFrame(drawLevel);
+  const m = motion.g, k = 0.15;
+  motion.g = m ? { x: m.x + (levelG.x - m.x) * k, y: m.y + (levelG.y - m.y) * k, z: m.z + (levelG.z - m.z) * k } : levelG;
+  motion.t = Date.now();
+  if (levelOn && !levelRaf) levelRaf = requestAnimationFrame(drawLevel);
+}
+function startMotion() { if (!motion.on) { window.addEventListener('devicemotion', onMotion); motion.on = true; } }
+function stopMotion() { window.removeEventListener('devicemotion', onMotion); motion.on = false; motion.g = null; levelG = null; }
+/* Phone tilt in degrees. roll: turned left or right (0 = upright; skipped
+   when pointing at the floor or ceiling). pitch: aiming up or down
+   (positive = the camera aims lower). Null without a recent sensor reading. */
+function phoneTilt() {
+  if (!motion.g || Date.now() - motion.t > 1000) return null;
+  const { x, y, z } = motion.g, m = Math.hypot(x, y, z);
+  if (m < 5) return null;
+  const pitch = Math.asin(Math.max(-1, Math.min(1, z / m))) * 180 / Math.PI;
+  const roll = Math.abs(z) / m > 0.85 ? null : Math.atan2(x, y) * 180 / Math.PI;
+  return { roll: roll === null ? null : Math.round(roll * 10) / 10, pitch: Math.round(pitch * 10) / 10 };
 }
 function drawLevel() {
   levelRaf = 0;
@@ -1127,23 +1206,24 @@ function drawLevel() {
 }
 function setLevel(on) {
   levelOn = on;
-  if (on) {
-    window.addEventListener('devicemotion', onMotion);
-  } else {
-    window.removeEventListener('devicemotion', onMotion);
-    levelG = null;
-    $('level').classList.remove('on');
-  }
+  if (on) startMotion();
+  else $('level').classList.remove('on');
 }
+// iPhone asks once for the motion sensor; it must be asked during a tap. A
+// "no" is remembered, so it never asks again.
 function requestMotionPermission() {
   try {
     if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-      DeviceMotionEvent.requestPermission().catch(() => {});
+      if (localStorage.getItem('aligno_motion') === 'denied') return;
+      DeviceMotionEvent.requestPermission().then(r => {
+        try { localStorage.setItem('aligno_motion', r); } catch (e) {}
+      }).catch(() => {});
     }
   } catch (e) {}
 }
 
 async function openCamera() {
+  requestMotionPermission(); // first, while still inside the tap
   enterCameraFullscreen();
   const p = await dbGetProject(state.projectId);
   if (!p) return;
@@ -1157,8 +1237,9 @@ async function openCamera() {
   syncModeSeg();
   if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
   zoom.last = last && typeof last.zoom === 'number' ? last.zoom : null;
+  guide.refTilt = last && last.tilt || null;
   zoom.lens = 'main';
-  align.told = false; guide.off = false;
+  align.told = false; align.hinted = false; guide.off = false;
   show('camera');
   layoutCamera();
   await startCamera();
@@ -1563,6 +1644,7 @@ async function startCamera(depth) {
     resetExposure();
     syncFlashBtn();
     if (facing === 'environment' && curFlash() === 'light') setTorch(true);
+    startMotion();
     startAlignScore();
     err.classList.remove('on');
   } catch (e) {
@@ -1585,6 +1667,7 @@ function stopCamera() {
   zoom.track = null;
   cancelCountdown();
   setLevel(false);
+  stopMotion();
   stopAlignScore();
 }
 
@@ -1715,6 +1798,8 @@ async function takePhoto(v) {
   const ph = { id: uid(), projectId: p.id, ts: Date.now(), blob, src: 'camera' };
   if (thumb) ph.thumb = thumb;
   if (zoom.cur) ph.zoom = Math.round(zoom.cur * 100) / 100;
+  const tilt = phoneTilt();
+  if (tilt) ph.tilt = tilt;
   await dbAddPhoto(ph);
   p.updatedAt = Date.now();
   await dbPutProject(p);
@@ -1722,6 +1807,7 @@ async function takePhoto(v) {
 
   const count = (await dbPhotoCount(p.id)) + ((p.photos && p.photos.length) || 0);
   zoom.last = ph.zoom || null;
+  guide.refTilt = ph.tilt || null;
   renderZoomStops();
   setOverlay(urlFor(ph, 'full'));
   camBadge('Photo ' + count + ' saved');
@@ -2256,23 +2342,42 @@ function grayPyramid(src, k) {
 function certain(r, minFit) {
   return !!(r && r.ok && !r.edge && r.tex >= 6 && r.distinct >= 0.15 && r.v >= minFit && r.v >= r.id - 0.005);
 }
-const T_ID = { ar: 1, ai: 0, br: 0, bi: 0 };
-function tFrom(r) { return { ar: r.s * Math.cos(r.th), ai: r.s * Math.sin(r.th), br: r.tx, bi: r.ty }; }
+/* Transforms are 3×3 matrices (row by row) on normalized coordinates:
+   [vx·w, vy·w, w] = H·[ux, uy, 1]. A similarity (shift, turn, scale) has a
+   bottom row of [0, 0, 1]; Stabilize may add a little perspective there. */
+const T_ID = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+function tFrom(r) {
+  const ar = r.s * Math.cos(r.th), ai = r.s * Math.sin(r.th);
+  return [ar, -ai, r.tx, ai, ar, r.ty, r.px || 0, r.py || 0, 1];
+}
 // B after A: u -> B(A(u)).
 function tCompose(B, A) {
-  return { ar: B.ar * A.ar - B.ai * A.ai, ai: B.ar * A.ai + B.ai * A.ar,
-    br: B.ar * A.br - B.ai * A.bi + B.br, bi: B.ar * A.bi + B.ai * A.br + B.bi };
+  const o = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[i * 3 + j] = B[i * 3] * A[j] + B[i * 3 + 1] * A[3 + j] + B[i * 3 + 2] * A[6 + j];
+  return o;
 }
-function tParts(t) { return { s: Math.hypot(t.ar, t.ai), th: Math.atan2(t.ai, t.ar), tx: t.br, ty: t.bi }; }
+function tInv(m) {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
+  return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, B / det, (a * i - c * g) / det, -(a * f - c * d) / det, C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
+}
+function tApply(m, ux, uy) {
+  const w = m[6] * ux + m[7] * uy + m[8];
+  return [(m[0] * ux + m[1] * uy + m[2]) / w, (m[3] * ux + m[4] * uy + m[5]) / w];
+}
+function tParts(m) { return { s: Math.hypot(m[0], m[3]), th: Math.atan2(m[3], m[0]), tx: m[2], ty: m[5] }; }
+function tFlat(m) { return Math.abs(m[6]) < 1e-5 && Math.abs(m[7]) < 1e-5; }
 function median(a) { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 
 /* --- Stabilize (Export): every photo is measured against the first one; if
    that is not certain (the scene changed over time), against the last photo
-   that was lined up. Photos that stay uncertain, or would need too much
-   cropping, are left exactly as taken and counted in the note. The output is
-   centred on the typical position of the series and cropped just enough
-   that no photo shows an empty edge. The photos themselves never change. --- */
-const STAB_OPTS = { sMin: 0.85, sMax: 1.18, thMax: 8, shift: 8 };
+   that was lined up. The measuring ignores what changed (the subject itself)
+   and corrects a slightly different tilt of the phone (perspective). Photos
+   that stay uncertain, or would need too much cropping, are left exactly as
+   taken and counted in the note. The output is centred on the typical
+   position of the series and cropped just enough that no photo shows an
+   empty edge. The photos themselves never change. --- */
+const STAB_OPTS = { sMin: 0.85, sMax: 1.18, thMax: 8, shift: 8, trim: true, persp: true };
 const STAB_ZMAX = 1.2;
 const stab = { key: null, T: null, running: null, z: {}, frames: null, framesKey: null, done: 0, failed: 0 };
 function setStabInfo(t) { $('stabInfo').textContent = t; }
@@ -2281,8 +2386,8 @@ const STAB_IDLE = 'Lines the photos up for you, so only your subject changes';
 function zoomNeeded(T, iw, ih, W, H) {
   const k = Math.min(iw, ih * 3 / 4), r = Math.max(W / iw, H / ih);
   const fits = z => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => {
-    const ux = sx * W / 2 / (r * k * z), uy = sy * H / 2 / (r * k * z);
-    const qx = iw / 2 + k * (T.ar * ux - T.ai * uy + T.br), qy = ih / 2 + k * (T.ai * ux + T.ar * uy + T.bi);
+    const v = tApply(T, sx * W / 2 / (r * k * z), sy * H / 2 / (r * k * z));
+    const qx = iw / 2 + k * v[0], qy = ih / 2 + k * v[1];
     return qx >= -0.5 && qy >= -0.5 && qx <= iw + 0.5 && qy <= ih + 0.5;
   });
   if (fits(1)) return 1;
@@ -2298,15 +2403,46 @@ function stabZoom(W, H) {
   stab.T.forEach((T, i) => { const im = exp.thumbs[i]; if (T && im) z = Math.max(z, zoomNeeded(T, im.naturalWidth, im.naturalHeight, W, H)); });
   return (stab.z[key] = Math.min(z, 1.6));
 }
-// Draws photo `src` into W×H through transform T, zoomed in by z.
+/* Draws photo `src` into W×H through transform T, zoomed in by z. Without
+   perspective the canvas does it in one go; with perspective every output
+   pixel is looked up in the photo (a canvas cannot draw perspective). */
 function drawStab(ctx, src, W, H, T, z) {
-  const iw = src.naturalWidth || src.width, ih = src.naturalHeight || src.height;
-  const k = Math.min(iw, ih * 3 / 4), r = Math.max(W / iw, H / ih), D = r * k * z;
-  const n2 = T.ar * T.ar + T.ai * T.ai, mr = D / k * T.ar / n2, mi = -D / k * T.ai / n2;
-  const cx = iw / 2 + k * T.br, cy = ih / 2 + k * T.bi;
-  ctx.setTransform(mr, mi, -mi, mr, W / 2 - (mr * cx - mi * cy), H / 2 - (mi * cx + mr * cy));
-  ctx.drawImage(src, 0, 0);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const iw0 = src.naturalWidth || src.width, ih0 = src.naturalHeight || src.height;
+  if (tFlat(T)) {
+    const iw = iw0, ih = ih0, k = Math.min(iw, ih * 3 / 4), D = Math.max(W / iw, H / ih) * k * z;
+    const det = T[0] * T[4] - T[1] * T[3], g = D / k;
+    const m11 = g * T[4] / det, m12 = -g * T[1] / det, m21 = -g * T[3] / det, m22 = g * T[0] / det;
+    const cx = iw / 2 + k * T[2], cy = ih / 2 + k * T[5];
+    ctx.setTransform(m11, m21, m12, m22, W / 2 - (m11 * cx + m12 * cy), H / 2 - (m21 * cx + m22 * cy));
+    ctx.drawImage(src, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
+  // The photo at about one photo pixel per output pixel, so sampling stays smooth.
+  const f = Math.min(1, Math.max(W / iw0, H / ih0) * z * 1.05);
+  const iw = Math.max(1, Math.round(iw0 * f)), ih = Math.max(1, Math.round(ih0 * f));
+  const sc = document.createElement('canvas'); sc.width = iw; sc.height = ih;
+  const sx = smooth(sc.getContext('2d', { willReadFrequently: true }));
+  sx.drawImage(src, 0, 0, iw, ih);
+  const sd = sx.getImageData(0, 0, iw, ih).data;
+  const k = Math.min(iw, ih * 3 / 4), D = Math.max(W / iw, H / ih) * k * z;
+  const out = ctx.createImageData(W, H), od = out.data;
+  for (let y = 0; y < H; y++) {
+    const uy = (y + 0.5 - H / 2) / D;
+    for (let x = 0; x < W; x++) {
+      const ux = (x + 0.5 - W / 2) / D, w = T[6] * ux + T[7] * uy + T[8];
+      const qx = iw / 2 + k * (T[0] * ux + T[1] * uy + T[2]) / w - 0.5, qy = ih / 2 + k * (T[3] * ux + T[4] * uy + T[5]) / w - 0.5;
+      const o = (y * W + x) * 4;
+      od[o + 3] = 255;
+      if (qx < 0 || qy < 0 || qx > iw - 1 || qy > ih - 1) continue;
+      const x0 = qx | 0, y0 = qy | 0, x1 = Math.min(iw - 1, x0 + 1), y1 = Math.min(ih - 1, y0 + 1), fx = qx - x0, fy = qy - y0;
+      const i00 = (y0 * iw + x0) * 4, i10 = (y0 * iw + x1) * 4, i01 = (y1 * iw + x0) * 4, i11 = (y1 * iw + x1) * 4;
+      for (let c = 0; c < 3; c++) {
+        od[o + c] = (sd[i00 + c] * (1 - fx) + sd[i10 + c] * fx) * (1 - fy) + (sd[i01 + c] * (1 - fx) + sd[i11 + c] * fx) * fy;
+      }
+    }
+  }
+  ctx.putImageData(out, 0, 0);
 }
 async function computeStab() {
   const key = exp.photos.map(p => p.id).join(',');
@@ -2338,10 +2474,9 @@ async function computeStab() {
     const ok = T.map((t, i) => t ? i : -1).filter(i => i >= 0);
     const parts = ok.map(i => tParts(T[i]));
     const s = median(parts.map(p => p.s)), th = median(parts.map(p => p.th));
-    const C = { ar: s * Math.cos(th), ai: s * Math.sin(th), br: median(parts.map(p => p.tx)), bi: median(parts.map(p => p.ty)) };
+    const C = tFrom({ s, th, tx: median(parts.map(p => p.tx)), ty: median(parts.map(p => p.ty)) });
     // Output frame = the typical photo: photo i is reached through C⁻¹, then T.
-    const n2 = C.ar * C.ar + C.ai * C.ai, Ci = { ar: C.ar / n2, ai: -C.ai / n2 };
-    Ci.br = -(Ci.ar * C.br - Ci.ai * C.bi); Ci.bi = -(Ci.ar * C.bi + Ci.ai * C.br);
+    const Ci = tInv(C);
     const out = T.map(t => t ? tCompose(t, Ci) : null);
     // Photos that would need too much cropping stay as taken.
     out.forEach((t, i) => {

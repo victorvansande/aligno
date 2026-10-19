@@ -95,3 +95,38 @@ async function run(opts) {
   return out;
 }
 window.alignTest = { run, view, getScenes, est };
+
+// A view with perspective, as if the phone was tilted a little (px, py), on
+// top of shift/turn/scale p: the straight view warped through the matrix.
+function viewPersp(scene, p, opts) {
+  const straight = view(scene, {}, opts);
+  const T = window.tFrom({ s: p.s || 1, th: p.th || 0, tx: p.tx || 0, ty: p.ty || 0, px: p.px || 0, py: p.py || 0 });
+  const c = document.createElement('canvas'); c.width = 900; c.height = 1200;
+  const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 900, 1200);
+  window.drawStab(x, straight, 900, 1200, window.tInv(T), 1);
+  return c;
+}
+// Same room, but one big piece of furniture moved (things change at home).
+function viewMoved(scene, p, opts) {
+  const c = view(scene, p, opts), x = c.getContext('2d');
+  x.fillStyle = '#5a3d2b'; x.fillRect(80, 650, 260, 420);
+  return c;
+}
+window.alignTest.viewPersp = viewPersp;
+window.alignTest.viewMoved = viewMoved;
+async function hard(opts) {
+  const S = getScenes(), out = [], deg = Math.PI / 180;
+  const ref = view(S.room, {}, { plant: 0.3 });
+  const cases = [
+    ['perspective (tilted 4°)', viewPersp(S.room, { px: 0.07, tx: 0.02 }, { plant: 0.3, noise: 12 }), { tx: 0.02 }],
+    ['plant grew a lot', view(S.room, { tx: 0.025, s: 1.04 }, { plant: 1.3, noise: 12 }), { tx: 0.025, s: 1.04 }],
+    ['cupboard moved', viewMoved(S.room, { ty: -0.03, th: 2 * deg }, { plant: 0.35, noise: 12 }), { ty: -0.03, th: 2 * deg }]
+  ];
+  for (const [name, mov, p] of cases) {
+    const r = await est(ref, mov, opts);
+    const err = Math.max(Math.abs(r.s - (p.s || 1)) * 0.5, Math.abs(r.th - (p.th || 0)) * 0.5, Math.abs(r.tx - (p.tx || 0)), Math.abs(r.ty - (p.ty || 0)));
+    out.push({ name, certain: window.certain(r, 0.6), errPct: +(err * 100).toFixed(2), px: r.px && +r.px.toFixed(3), v: +r.v.toFixed(2), ms: r.ms });
+  }
+  return out;
+}
+window.alignTest.hard = hard;
