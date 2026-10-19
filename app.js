@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v40';
+const APP_VERSION = 'v41';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -766,6 +766,84 @@ function setOverlay(raw, source) {
   layoutCamera();
 }
 
+/* Alignment score: a few times per second the live picture is compared with
+   the last photo, both shrunk to 36×48 (brightness and outlines, normalised so
+   that a lighter or darker day does not matter). The result fills the ring
+   around the shutter; it turns green once the two line up. Plain arithmetic
+   on pixels, no AI. Only while there is a photo to line up with. */
+const ALIGN_W = 36, ALIGN_H = 48;
+const align = { timer: 0, ref: null, refUrl: null, loading: null, ema: 0, ok: false, told: false, cv: null, cv2: null };
+function alignFeatures(src, sx, sy, sw, sh) {
+  if (!align.cv) {
+    align.cv = Object.assign(document.createElement('canvas'), { width: ALIGN_W * 4, height: ALIGN_H * 4 });
+    align.cv2 = Object.assign(document.createElement('canvas'), { width: ALIGN_W, height: ALIGN_H });
+  }
+  // Two steps down, so the small picture is a smooth average, not noise.
+  const a = align.cv.getContext('2d'), b = align.cv2.getContext('2d', { willReadFrequently: true });
+  a.drawImage(src, sx, sy, sw, sh, 0, 0, ALIGN_W * 4, ALIGN_H * 4);
+  b.drawImage(align.cv, 0, 0, ALIGN_W, ALIGN_H);
+  const d = b.getImageData(0, 0, ALIGN_W, ALIGN_H).data, n = ALIGN_W * ALIGN_H;
+  const gray = new Float32Array(n), grad = new Float32Array(n);
+  for (let i = 0; i < n; i++) gray[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  for (let y = 1; y < ALIGN_H - 1; y++) for (let x = 1; x < ALIGN_W - 1; x++) {
+    const i = y * ALIGN_W + x;
+    grad[i] = Math.hypot(gray[i + 1] - gray[i - 1], gray[i + ALIGN_W] - gray[i - ALIGN_W]);
+  }
+  return { gray, grad };
+}
+function ncc(p, q) {
+  let mp = 0, mq = 0;
+  for (let i = 0; i < p.length; i++) { mp += p[i]; mq += q[i]; }
+  mp /= p.length; mq /= q.length;
+  let s = 0, sp = 0, sq = 0;
+  for (let i = 0; i < p.length; i++) { const a = p[i] - mp, b = q[i] - mq; s += a * b; sp += a * a; sq += b * b; }
+  return sp && sq ? s / Math.sqrt(sp * sq) : 0;
+}
+function loadAlignRef() {
+  const url = overlayRaw;
+  if (!url || align.refUrl === url || align.loading === url) return;
+  align.loading = url;
+  const im = new Image();
+  im.onload = () => {
+    if (align.loading !== url) return;
+    // Same centred 3:4 cut the overlay shows.
+    const W = im.naturalWidth, H = im.naturalHeight;
+    let sw = W, sh = H;
+    if (W / H > 3 / 4) sw = H * 3 / 4; else sh = W * 4 / 3;
+    try { align.ref = alignFeatures(im, (W - sw) / 2, (H - sh) / 2, sw, sh); align.refUrl = url; } catch (e) { align.ref = null; }
+    align.loading = null;
+  };
+  im.src = url;
+}
+function alignTick() {
+  const ring = $('alignRing'), v = $('video');
+  const active = state.screen === 'camera' && camHasOverlay && !!stream && v.videoWidth > 0 && !document.hidden;
+  if (!active) { ring.classList.remove('on', 'ok'); align.ema = 0; align.ok = false; return; }
+  loadAlignRef();
+  if (!align.ref || align.refUrl !== overlayRaw) return;
+  let raw;
+  try {
+    const k = viewCrop(v.videoWidth, v.videoHeight);
+    const f = alignFeatures(v, k.sx, k.sy, k.sw, k.sh);
+    raw = 0.5 * ncc(f.gray, align.ref.gray) + 0.5 * ncc(f.grad, align.ref.grad);
+  } catch (e) { return; }
+  align.ema = align.ema ? align.ema * 0.6 + raw * 0.4 : raw;
+  const s = align.ema;
+  const ok = align.ok ? s >= 0.74 : s >= 0.8;
+  if (ok && !align.ok) {
+    if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
+    if (!align.told) { align.told = true; camBadge('Lined up with your last photo'); }
+  }
+  align.ok = ok;
+  const fill = Math.max(0.04, Math.min(1, (s - 0.3) / 0.5));
+  ring.querySelector('circle').style.strokeDashoffset = String(100 - fill * 100);
+  ring.classList.add('on');
+  ring.classList.toggle('ok', ok);
+  $('shot').setAttribute('aria-label', ok ? 'Take photo, lined up with your last photo' : 'Take photo');
+}
+function startAlignScore() { stopAlignScore(); align.timer = setInterval(alignTick, 200); }
+function stopAlignScore() { clearInterval(align.timer); align.timer = 0; align.ema = 0; align.ok = false; $('alignRing').classList.remove('on', 'ok'); }
+
 /* Hints never block the camera: one quiet line under the mode tabs that
    fades after a few seconds (shown on the first visits and when you switch
    mode), and a first-photo tip that a single tap dismisses for good. */
@@ -999,6 +1077,7 @@ async function openCamera() {
   if (last) setOverlay(urlFor(last, 'full')); else hideOverlay();
   zoom.last = last && typeof last.zoom === 'number' ? last.zoom : null;
   zoom.lens = 'main';
+  align.told = false;
   show('camera');
   layoutCamera();
   await startCamera();
@@ -1403,6 +1482,7 @@ async function startCamera(depth) {
     resetExposure();
     syncFlashBtn();
     if (facing === 'environment' && curFlash() === 'light') setTorch(true);
+    startAlignScore();
     err.classList.remove('on');
   } catch (e) {
     const n = e && e.name;
@@ -1424,6 +1504,7 @@ function stopCamera() {
   zoom.track = null;
   cancelCountdown();
   setLevel(false);
+  stopAlignScore();
 }
 
 /* Layout (DESIGN.md §14), the standard of every camera app: tools bar at the
@@ -1482,19 +1563,59 @@ async function capturePhoto() {
   capturing = true;
   try { await takePhoto(v); } finally { capturing = false; }
 }
+/* Full photo (Chrome on Android): instead of a frame of the live video
+   (about 1920×1440), the camera takes a real still at full sensor size, up
+   to 4096 px, with the phone's real flash where it has one. Safari has no
+   way to do this; there the video frame is used, as before. Any problem
+   (slow, wrong shape, smaller than the video) falls back to the video frame. */
+const PHOTO_MAX = 4096;
+async function fullPhotoPlan() {
+  if (typeof ImageCapture === 'undefined' || !stream) return null;
+  try {
+    const track = stream.getVideoTracks()[0];
+    const ic = new ImageCapture(track);
+    const pc = await Promise.race([ic.getPhotoCapabilities(), wait(1500).then(() => null)]);
+    if (!pc) return null;
+    const opts = {};
+    if (pc.imageWidth && pc.imageWidth.max) opts.imageWidth = Math.min(pc.imageWidth.max, PHOTO_MAX);
+    // The real flash, when the user wants one (not with the lamp left on).
+    const m = flashAvailable() ? curFlash() : 'off', fl = pc.fillLightMode || [];
+    let usesFlash = false;
+    if (facing === 'environment' && m !== 'light' && fl.indexOf('flash') >= 0) {
+      usesFlash = true;
+      opts.fillLightMode = m === 'on' ? 'flash' : m === 'auto' && fl.indexOf('auto') >= 0 ? 'auto' : m === 'auto' ? (sceneIsDark() ? 'flash' : 'off') : 'off';
+    }
+    return { ic, opts, usesFlash };
+  } catch (e) { return null; }
+}
+async function grabFullPhoto(plan, v) {
+  try {
+    const blob = await Promise.race([plan.ic.takePhoto(plan.opts), wait(6000).then(() => null)]);
+    if (!blob) return null;
+    const bm = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    // Same orientation as the live view and really larger, or not worth it.
+    if ((bm.width > bm.height) !== (v.videoWidth > v.videoHeight) || bm.width * bm.height <= v.videoWidth * v.videoHeight) { bm.close(); return null; }
+    return bm;
+  } catch (e) { return null; }
+}
 async function takePhoto(v) {
   if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
-  const flashOff = await fireFlash();
-
-  // Save exactly what the viewfinder shows: the same crop the live view draws.
-  const k = viewCrop(v.videoWidth, v.videoHeight);
-  const c = document.createElement('canvas');
-  c.width = Math.round(k.sw); c.height = Math.round(k.sh);
-  c.getContext('2d').drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, c.width, c.height);
-  if (flashOff) flashOff();
-
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
+
+  const plan = await fullPhotoPlan();
+  const flashOff = plan && plan.usesFlash ? null : await fireFlash();
+  const full = plan ? await grabFullPhoto(plan, v) : null;
+  const src = full || v;
+  const W = full ? full.width : v.videoWidth, H = full ? full.height : v.videoHeight;
+
+  // Save exactly what the viewfinder shows: the same crop the live view draws.
+  const k = viewCrop(W, H);
+  const c = document.createElement('canvas');
+  c.width = Math.round(k.sw); c.height = Math.round(k.sh);
+  c.getContext('2d').drawImage(src, k.sx, k.sy, k.sw, k.sh, 0, 0, c.width, c.height);
+  if (full) full.close();
+  if (flashOff) flashOff();
 
   const blob = await toBlobP(c, 'image/jpeg', 0.92);
   if (!blob) return;

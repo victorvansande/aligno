@@ -370,7 +370,7 @@
   .cam-top{ position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:var(--s-2);
     padding:calc(env(safe-area-inset-top) + var(--s-3)) var(--gutter) var(--s-3); color:var(--on-dark); }
   .cam-top .nm{ flex:1; min-width:0; padding:0 var(--s-2); text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-    font-size:var(--fs-control); font-weight:600; letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4); }
+    font-size:var(--fs-label); font-weight:600; color:var(--on-dark-2); }
   .cam-actions{ display:flex; gap:var(--s-2); }
   .ciconbtn{ position:relative; width:var(--tap); height:var(--tap); flex:none; border:none; border-radius:50%; cursor:pointer; color:var(--on-dark);
     display:flex; align-items:center; justify-content:center; transition:transform var(--t-fast) var(--ease); }
@@ -433,10 +433,16 @@
   .cthumb{ width:54px; height:54px; object-fit:cover; cursor:pointer; border-radius:var(--r-sm); border:2.5px solid rgba(255,255,255,.7); background:#222;
     transition:transform var(--t-fast) var(--ease); }
   .cthumb:active{ transform:scale(.92); }
-  .shutter{ width:80px; height:80px; padding:0; border:none; border-radius:50%; cursor:pointer; background:#fff;
+  .shutter{ position:relative; width:80px; height:80px; padding:0; border:none; border-radius:50%; cursor:pointer; background:#fff;
     box-shadow:0 0 0 4px rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; transition:transform var(--t-fast) var(--ease); }
   .shutter:active{ transform:scale(.92); }
   .shutter:disabled{ opacity:.6; }
+  .align-ring{ position:absolute; inset:-4px; width:calc(100% + 8px); height:calc(100% + 8px); transform:rotate(-90deg); pointer-events:none;
+    opacity:0; transition:opacity var(--t-base); }
+  .align-ring circle{ fill:none; stroke:var(--accent-on-dark); stroke-width:4; stroke-linecap:round; stroke-dasharray:100; stroke-dashoffset:100;
+    transition:stroke-dashoffset var(--t-base) var(--ease), stroke var(--t-base); }
+  .align-ring.on{ opacity:1; }
+  .align-ring.ok circle{ stroke:var(--level-ok); }
   .shutter i{ display:block; width:64px; height:64px; border-radius:50%; background:#fff; box-shadow:inset 0 0 0 2px rgba(0,0,0,.08); }
   .camerr{ position:absolute; inset:0; z-index:9; display:none; flex-direction:column; align-items:center; justify-content:center;
     padding:var(--s-8); text-align:center; background:var(--ink); }
@@ -880,7 +886,7 @@
         <div class="cam-side">
           <img id="camLastThumb" class="cthumb" hidden alt="Open the project">
         </div>
-        <button class="shutter" id="shot" aria-label="Take photo"><i></i></button>
+        <button class="shutter" id="shot" aria-label="Take photo"><svg class="align-ring" id="alignRing" viewBox="0 0 88 88" aria-hidden="true"><circle cx="44" cy="44" r="42" pathLength="100"/></svg><i></i></button>
         <div class="cam-side">
           <button class="ciconbtn glass flipbtn" id="flipBtn" aria-label="Switch camera"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 17-7"/><path d="M22 12a10 10 0 0 1-17 7"/><path d="M19 2v3h-3"/><path d="M5 22v-3h3"/></svg></button>
         </div>
