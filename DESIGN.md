@@ -224,14 +224,17 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 ## 14. Camera en zoeker
 
 - **Opbouw, van boven naar onder**: zwarte balk met sluiten (links), projectnaam (midden) en maximaal drie tools als losse iconen (raster, zelfontspanner, galerij). Dan de **zoeker in 3:4, altijd over de volle breedte** (nooit zwarte randen links en rechts). Daaronder: de zoomstappen, de schuifregelaar voor de overlay, de modustabs (Fade, Edges, Blend), één regel uitleg, en de bedieningsrij (laatste foto links, sluiter in het midden, camera wisselen rechts).
-- **Is het scherm te kort** (bv. met browserbalken), dan liggen de bedieningselementen over de onderrand van de zoeker, op een verloop naar zwart, zoals in de camera-apps van iOS en Android.
-- **Het live beeld wordt door de app zelf op maat gezet** zodat het de zoeker vult (`fitVideo()`); vertrouw nooit alleen op `object-fit` voor een camerastream, sommige browsers negeren dat.
+- **Is het scherm te kort** (bv. met browserbalken), dan liggen de bedieningselementen over de onderrand van de zoeker, op een donker maar doorzichtig verloop (nooit dekkend zwart), zodat het hele 3:4-kader zichtbaar blijft: wat je ziet is wat je bewaart. Zoals in de camera-apps van iOS en Android.
+- **Het live beeld tekent de app zelf** op een canvas (`drawLive()`), met exact dezelfde uitsnede als de bewaarde foto (`viewCrop()`). Vertrouw nooit op `object-fit` voor een camerastream: iOS negeert dat en toont het beeld uitgerekt of met randen. De `<video>` voedt alleen het canvas (en is de terugval als tekenen ooit faalt).
+- **De camera wordt in 4:3 gevraagd** (de vorm van de sensor, hoge resolutie), zodat 1× het volledige beeldveld toont zoals de toestelcamera. 16:9 zou de sensor bijsnijden.
+- **Elke wijziging aan de camera wordt getest** met nepcamera's in 9:16, 3:4, 16:9 en 4:3: cirkel blijft rond en in het midden, zoeker volledig gevuld, zoeker = bewaarde foto, frontcamera gespiegeld in de zoeker maar niet in de foto.
 - **Wat je ziet is wat je bewaart.** De foto wordt exact zo bijgesneden als de zoeker hem toont (3:4, plus eventuele digitale zoom). Raster, waterpas en overlay liggen in de zoeker, niet over de knoppen.
 - **Zoom gaat met vaste stappen**: 0.5×, 1×, 2×, 3×, 5×, 10×, voor zover het toestel ze kan. Geen schuifregelaar. Knijpen in de zoeker mag voor tussenwaarden; dicht bij een stap klikt de zoom erop vast (binnen 4%). De actieve stap toont de exacte waarde (bv. 2.4×).
 - **Herhaalbaarheid gaat voor alles**: elke foto bewaart zijn zoom, de camera opent op de zoom van de vorige foto, en zodra je daarvan afwijkt verschijnt een knop met die waarde om met één tik terug te keren.
 - **0.5× (ultragroothoek)**: als het toestel tot 0.5 kan zoomen, gewoon als stap. Heeft het een aparte ultragroothoeklens (iPhone: "Back Ultra Wide Camera"), dan wisselt de app van lens onder 0.75×. Geen van beide: geen 0.5-stap, nooit een nep-0.5.
 - Geen optische zoom beschikbaar: dezelfde stappen als digitale uitsnede, in de zoeker én de bewaarde foto.
 - **Opstarten en wisselen zoals een echte camera**: de zoeker blijft zwart tot het eerste beeld klaar is en het beeld vervaagt dan in; bij wisselen van camera of lens vervaagt (blur) het laatste beeld tot het nieuwe er is. Nooit een flits van een verkeerd geschaald beeld.
+- **Tik om scherp te stellen** waar de browser dat toelaat (Chrome op Android): een vierkantje in `--accent-on-dark` op de plek van de tik. Waar het niet kan (iPhone-browsers), geen vierkantje: nooit iets tonen dat niets doet.
 - Toolstatus (raster aan, timer 3 s) zie je aan het icoon in `--accent-on-dark` en een korte feedbackpil, niet aan extra tekstlabels.
 
 ## 15. Illustraties

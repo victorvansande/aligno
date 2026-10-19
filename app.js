@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v30';
+const APP_VERSION = 'v31';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -973,20 +973,6 @@ async function detectUltraWide() {
   } catch (e) {}
 }
 function digitalZoom() { return zoom.lens === 'ultra' || zoom.hw ? 1 : zoom.cur; }
-function applyVideoTransform() {
-  const z = digitalZoom(), m = facing === 'user' ? -1 : 1;
-  $('video').style.transform = 'translate(-50%,-50%)' + ((z !== 1 || m !== 1) ? ' scale(' + (z * m) + ',' + z + ')' : '');
-}
-/* Sizes the video to cover the 3:4 viewfinder by hand. Some browsers (iOS)
-   ignore object-fit on a live camera stream and letterbox it instead. */
-function fitVideo() {
-  const v = $('video'), box = $('vf');
-  const vw = v.videoWidth, vh = v.videoHeight, bw = box.clientWidth, bh = box.clientHeight;
-  if (!vw || !vh || !bw || !bh) return;
-  const s = Math.max(bw / vw, bh / vh);
-  v.style.width = Math.ceil(vw * s) + 'px';
-  v.style.height = Math.ceil(vh * s) + 'px';
-}
 async function setZoom(v, quiet) {
   if (zoom.switching) return;
   v = Number(v) || 1;
@@ -997,7 +983,7 @@ async function setZoom(v, quiet) {
     zoom.lens = v < 0.75 ? 'ultra' : 'main';
     await startCamera();
     zoom.switching = false;
-    if (zoom.lens === 'ultra') { applyVideoTransform(); renderZoomStops(); return; }
+    if (zoom.lens === 'ultra') { renderZoomStops(); return; }
   }
   if (zoom.lens === 'ultra') return;
   v = Math.max(zoom.min, Math.min(zoom.max, v));
@@ -1005,16 +991,40 @@ async function setZoom(v, quiet) {
   if (near) v = near;
   zoom.cur = v;
   if (zoom.hw && zoom.track) { try { await zoom.track.applyConstraints({ advanced: [{ zoom: v }] }); } catch (e) {} }
-  applyVideoTransform();
   renderZoomStops();
   if (!quiet && zoom.last && Math.abs(zoom.last - v) <= 0.04) camBadge('Same zoom as your last photo');
 }
 let vfPinch = null;
+/* Tap to focus, where the browser lets a web app steer focus (Chrome on
+   Android). The tap is mapped through the same crop and mirroring as the live
+   view. No focus square is shown where focusing is not possible. */
+function canTapFocus() {
+  try {
+    const t = stream && stream.getVideoTracks()[0];
+    const caps = t && t.getCapabilities ? t.getCapabilities() : null;
+    const sup = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
+    return !!(caps && sup.pointsOfInterest && caps.focusMode && caps.focusMode.indexOf('single-shot') >= 0);
+  } catch (e) { return false; }
+}
+async function focusAt(clientX, clientY) {
+  if (!canTapFocus()) return;
+  const r = $('vf').getBoundingClientRect(), v = $('video');
+  let nx = (clientX - r.left) / r.width, ny = (clientY - r.top) / r.height;
+  if (facing === 'user') nx = 1 - nx;
+  const k = viewCrop(v.videoWidth, v.videoHeight);
+  const fx = (k.sx + nx * k.sw) / v.videoWidth, fy = (k.sy + ny * k.sh) / v.videoHeight;
+  const ring = $('focusRing');
+  ring.style.left = (clientX - r.left) + 'px'; ring.style.top = (clientY - r.top) + 'px';
+  ring.classList.remove('on'); void ring.offsetWidth; ring.classList.add('on');
+  try { await stream.getVideoTracks()[0].applyConstraints({ advanced: [{ pointsOfInterest: [{ x: fx, y: fy }], focusMode: 'single-shot' }] }); } catch (e) {}
+}
 function wireViewfinderPinch() {
   const vf = $('vf'), pts = new Map();
   vf.addEventListener('pointerdown', e => {
     if (e.target.closest('button')) return;
     pts.set(e.pointerId, e);
+    if (pts.size === 1) vf._tap = { x: e.clientX, y: e.clientY, t: Date.now() };
+    else vf._tap = null;
     if (pts.size === 2) { const [a, b] = [...pts.values()]; vfPinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom.cur }; }
   });
   vf.addEventListener('pointermove', e => {
@@ -1022,9 +1032,75 @@ function wireViewfinderPinch() {
     pts.set(e.pointerId, e);
     if (pts.size === 2 && vfPinch) { const [a, b] = [...pts.values()]; setZoom(vfPinch.z * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / vfPinch.d, true); }
   });
-  const end = e => { pts.delete(e.pointerId); if (pts.size < 2) vfPinch = null; };
+  const end = e => {
+    const tap = vf._tap;
+    if (e.type === 'pointerup' && tap && pts.size === 1 && Date.now() - tap.t < 350 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 10) focusAt(e.clientX, e.clientY);
+    vf._tap = null;
+    pts.delete(e.pointerId); if (pts.size < 2) vfPinch = null;
+  };
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => vf.addEventListener(t, end));
   $('zoomStops').addEventListener('click', e => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.getAttribute('data-z')); });
+}
+
+/* --- Live view: the camera stream is drawn onto a canvas, frame by frame,
+   with exactly the crop that a saved photo gets (viewCrop). So the viewfinder
+   can never be stretched or letterboxed by the browser (iOS ignores
+   object-fit on camera streams), and what you see is what you save. The
+   <video> element only feeds the canvas. --- */
+function viewCrop(vw, vh) {
+  const ar = 3 / 4, dz = digitalZoom();
+  let sw = vw, sh = vh;
+  if (vw / vh > ar) sw = vh * ar; else sh = vw / ar;
+  sw /= dz; sh /= dz;
+  return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
+}
+const live = { raf: 0, hold: false, frames: 0, last: 0 };
+function drawLive(now) {
+  live.raf = requestAnimationFrame(drawLive);
+  if (live.hold) return;
+  // Cameras deliver about 30 frames a second; drawing more often (120 Hz
+  // screens) only costs battery.
+  if (now && now - live.last < 30) return;
+  live.last = now || 0;
+  const v = $('video'), c = $('vfCanvas');
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh || v.readyState < 2) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const W = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
+  if (!W || !H) return;
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  const ctx = c.getContext('2d');
+  const k = viewCrop(vw, vh);
+  ctx.save();
+  if (facing === 'user') { ctx.translate(W, 0); ctx.scale(-1, 1); }
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, W, H);
+  ctx.restore();
+  live.frames++;
+}
+function startLive() { if (!live.raf) live.raf = requestAnimationFrame(drawLive); }
+function stopLive(clear) {
+  cancelAnimationFrame(live.raf); live.raf = 0;
+  if (clear) { const c = $('vfCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+}
+// Resolves once the canvas has drawn real frames of the new stream.
+function liveReady() {
+  const start = live.frames;
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    (function wait() {
+      if (live.frames - start >= 2 || Date.now() - t0 > 2500) resolve();
+      else setTimeout(wait, 30);
+    })();
+  });
+}
+// Asks for the sensor's own 4:3 shape at a high resolution, so 1× shows the
+// full field of view like the native camera app (16:9 would crop the sensor).
+function videoConstraints() {
+  const base = { width: { ideal: 4032 }, height: { ideal: 3024 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 30 }, resizeMode: { ideal: 'none' } };
+  return zoom.lens === 'ultra' && zoom.ultraId
+    ? Object.assign({ deviceId: { exact: zoom.ultraId } }, base)
+    : Object.assign({ facingMode: { ideal: facing } }, base);
 }
 
 async function startCamera() {
@@ -1033,18 +1109,20 @@ async function startCamera() {
     $('camerrMsg').textContent = 'The camera only works over a secure https link. Open the app via the shared link.';
     err.classList.add('on'); return;
   }
-  // Like a native camera: on a switch the last image blurs, on a fresh start
-  // the viewfinder stays black, and the new image fades in only once its first
-  // frame is ready (no flash of a wrongly sized picture).
+  // Like a native camera: on a fresh start the viewfinder stays black until
+  // the first frame is drawn; on a switch the last frame stays, blurred,
+  // until the new camera delivers.
   const vf = $('vf');
-  if (stream) vf.classList.add('switching'); else vf.classList.remove('live');
+  const switching = !!stream;
+  if (switching) { live.hold = true; vf.classList.add('switching'); } else vf.classList.remove('live');
   try {
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: zoom.lens === 'ultra' && zoom.ultraId
-        ? { deviceId: { exact: zoom.ultraId }, width: { ideal: 2560 }, height: { ideal: 1440 } }
-        : { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 1440 } },
-      audio: false
-    });
+    let newStream;
+    try { newStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false }); }
+    catch (e) {
+      if (e && (e.name === 'OverconstrainedError' || e.name === 'NotReadableError')) {
+        newStream = await navigator.mediaDevices.getUserMedia({ video: zoom.lens === 'ultra' && zoom.ultraId ? { deviceId: { exact: zoom.ultraId } } : { facingMode: facing }, audio: false });
+      } else throw e;
+    }
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = newStream;
     $('video').srcObject = stream;
@@ -1052,10 +1130,9 @@ async function startCamera() {
     await $('video').play();
     if (zoom.lens === 'main') await detectUltraWide();
     setupZoom();
-    fitVideo();
-    applyVideoTransform();
-    await firstFrame($('video'));
-    fitVideo();
+    live.hold = false;
+    startLive();
+    await liveReady();
     vf.classList.remove('switching');
     vf.classList.add('live');
     keepAwake(true);
@@ -1067,21 +1144,14 @@ async function startCamera() {
       ? 'Allow camera access in your browser and try again.'
       : (n === 'NotFoundError') ? 'No usable camera found, or it is in use by another app.'
       : (e && e.message) || 'Unknown error.';
+    live.hold = false;
     vf.classList.remove('switching');
     err.classList.add('on');
   }
 }
-function firstFrame(v) {
-  return new Promise(resolve => {
-    const done = () => { clearTimeout(t); resolve(); };
-    const t = setTimeout(resolve, 1500);
-    if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => requestAnimationFrame(done));
-    else if (v.videoWidth && !v.paused) requestAnimationFrame(() => requestAnimationFrame(done));
-    else v.addEventListener('playing', () => requestAnimationFrame(done), { once: true });
-  });
-}
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  stopLive(true);
   $('vf').classList.remove('live', 'switching');
   keepAwake(false);
   zoom.track = null;
@@ -1096,15 +1166,11 @@ async function capturePhoto() {
   if (!v.videoWidth || !state.projectId) return;
   if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
 
-  // Save exactly what the viewfinder shows: the 3:4 centre of the frame,
-  // narrowed further by digital zoom when the phone has no optical zoom.
-  const vw = v.videoWidth, vh = v.videoHeight, ar = 3 / 4, dz = digitalZoom();
-  let sw = vw, sh = vh;
-  if (vw / vh > ar) sw = vh * ar; else sh = vw / ar;
-  sw /= dz; sh /= dz;
+  // Save exactly what the viewfinder shows: the same crop the live view draws.
+  const k = viewCrop(v.videoWidth, v.videoHeight);
   const c = document.createElement('canvas');
-  c.width = Math.round(sw); c.height = Math.round(sh);
-  c.getContext('2d').drawImage(v, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, c.width, c.height);
+  c.width = Math.round(k.sw); c.height = Math.round(k.sh);
+  c.getContext('2d').drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, c.width, c.height);
 
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
@@ -2540,10 +2606,6 @@ function wire() {
     saveCamPrefs();
   });
   wireViewfinderPinch();
-  $('video').addEventListener('loadedmetadata', fitVideo);
-  $('video').addEventListener('resize', fitVideo);
-  if (window.ResizeObserver) new ResizeObserver(fitVideo).observe($('vf'));
-  else window.addEventListener('resize', fitVideo);
 
   $('fps').addEventListener('input', function () {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
