@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v28';
+const CACHE = 'aligno-v29';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [
@@ -45,16 +45,29 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   if (req.method === 'POST' && url.pathname.endsWith('/share-target')) { e.respondWith(receiveShare(req)); return; }
   if (req.method !== 'GET') return;
-  e.respondWith(
-    caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then((hit) => hit || fetch(req).then((res) => {
-      if (res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => (req.mode === 'navigate' ? caches.match('./index.html') : Response.error())))
-  );
+  e.respondWith(isAppShell(req, url) ? networkFirst(req) : cacheFirst(req));
 });
+
+// The app's own code and page always come from the network when online (so a
+// new version shows up right away), with the cache as offline fallback.
+// Everything else (icons, the GIF encoder) is cache-first.
+function isAppShell(req, url) {
+  return req.mode === 'navigate' || /\/(index\.html|app\.js|manifest\.webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+}
+function remember(req, res) {
+  if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {}); }
+  return res;
+}
+function networkFirst(req) {
+  const key = req.mode === 'navigate' ? './index.html' : req;
+  const fromCache = () => caches.match(key, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html'));
+  const net = fetch(req, { cache: 'no-cache' }).then((res) => remember(key, res));
+  const slow = new Promise((resolve) => setTimeout(resolve, 4000)).then(fromCache);
+  return Promise.race([net.catch(fromCache), slow.then((hit) => hit || net)]).then((res) => res || Response.error());
+}
+function cacheFirst(req) {
+  return caches.match(req).then((hit) => hit || fetch(req).then((res) => remember(req, res)).catch(() => Response.error()));
+}
 
 // Reminders: on Android, an installed Aligno gets periodic background syncs.
 // Each one checks which projects are due and shows one notification per

@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -1023,6 +1023,11 @@ async function startCamera() {
     $('camerrMsg').textContent = 'The camera only works over a secure https link. Open the app via the shared link.';
     err.classList.add('on'); return;
   }
+  // Like a native camera: on a switch the last image blurs, on a fresh start
+  // the viewfinder stays black, and the new image fades in only once its first
+  // frame is ready (no flash of a wrongly sized picture).
+  const vf = $('vf');
+  if (stream) vf.classList.add('switching'); else vf.classList.remove('live');
   try {
     const newStream = await navigator.mediaDevices.getUserMedia({
       video: zoom.lens === 'ultra' && zoom.ultraId
@@ -1038,6 +1043,9 @@ async function startCamera() {
     if (zoom.lens === 'main') await detectUltraWide();
     setupZoom();
     applyVideoTransform();
+    await firstFrame($('video'));
+    vf.classList.remove('switching');
+    vf.classList.add('live');
     keepAwake(true);
     syncGridLevel();
     err.classList.remove('on');
@@ -1047,11 +1055,22 @@ async function startCamera() {
       ? 'Allow camera access in your browser and try again.'
       : (n === 'NotFoundError') ? 'No usable camera found, or it is in use by another app.'
       : (e && e.message) || 'Unknown error.';
+    vf.classList.remove('switching');
     err.classList.add('on');
   }
 }
+function firstFrame(v) {
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(t); resolve(); };
+    const t = setTimeout(resolve, 1500);
+    if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => requestAnimationFrame(done));
+    else if (v.videoWidth && !v.paused) requestAnimationFrame(() => requestAnimationFrame(done));
+    else v.addEventListener('playing', () => requestAnimationFrame(done), { once: true });
+  });
+}
 function stopCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $('vf').classList.remove('live', 'switching');
   keepAwake(false);
   zoom.track = null;
   cancelCountdown();
@@ -2004,9 +2023,25 @@ async function wipeAllData() {
   show('landing');
 }
 
-/* --- Service worker updates. --- */
+/* --- Service worker updates: a new version takes over by itself. When you
+   are browsing (home, a project, settings) the app simply reloads; in the
+   middle of something (camera, export, an open sheet) it waits and shows the
+   "Update ready" pill instead. --- */
+let reloadedForUpdate = false;
+function safeToReload() {
+  return ['home', 'landing', 'project', 'settings', 'reminders'].indexOf(state.screen) >= 0 &&
+    !openSheet() && !$('photoView').classList.contains('on') && !$('cmpView').classList.contains('on') && !exp.busy && !backupBusy;
+}
 function watchUpdates(reg) {
   if (!reg) return;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForUpdate || !hadController) return;
+    if (safeToReload()) { reloadedForUpdate = true; location.reload(); }
+    else $('updatePill').classList.add('on');
+  });
+  setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   reg.addEventListener('updatefound', () => {
     const nw = reg.installing;
     if (!nw) return;

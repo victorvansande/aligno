@@ -211,6 +211,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - Een nieuw scherm: toevoegen aan `screens` en aan `goBack()`. Een nieuwe overlay: klasse `.modal-bg`, of opnemen in de history-observer.
 - Fouten die de gebruiker raken: `toast()` met een duidelijke zin. Geen `alert()`, geen `confirm()`, wel `confirmSheet()`.
 - Geen frameworks, geen build-stap, geen externe scripts (alles werkt offline).
+- **Updates**: de service worker haalt de eigen code (pagina, `app.js`, manifest) altijd eerst van het netwerk en valt pas offline terug op de cache. Een nieuwe versie neemt het vanzelf over: herladen als je gewoon aan het rondkijken bent, anders de pil "Update ready".
 
 **Elke wijziging**
 1. Volg dit document.
@@ -226,6 +227,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - **Herhaalbaarheid gaat voor alles**: elke foto bewaart zijn zoom, de camera opent op de zoom van de vorige foto, en zodra je daarvan afwijkt verschijnt een knop met die waarde om met één tik terug te keren.
 - **0.5× (ultragroothoek)**: als het toestel tot 0.5 kan zoomen, gewoon als stap. Heeft het een aparte ultragroothoeklens (iPhone: "Back Ultra Wide Camera"), dan wisselt de app van lens onder 0.75×. Geen van beide: geen 0.5-stap, nooit een nep-0.5.
 - Geen optische zoom beschikbaar: dezelfde stappen als digitale uitsnede, in de zoeker én de bewaarde foto.
+- **Opstarten en wisselen zoals een echte camera**: de zoeker blijft zwart tot het eerste beeld klaar is en het beeld vervaagt dan in; bij wisselen van camera of lens vervaagt (blur) het laatste beeld tot het nieuwe er is. Nooit een flits van een verkeerd geschaald beeld.
 - Toolstatus (raster aan, timer 3 s) zie je aan het icoon in `--accent-on-dark` en een korte feedbackpil, niet aan extra tekstlabels.
 
 ## 15. Illustraties
