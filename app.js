@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -1616,6 +1616,11 @@ async function takePhoto(v) {
   c.getContext('2d').drawImage(src, k.sx, k.sy, k.sw, k.sh, 0, 0, c.width, c.height);
   if (full) full.close();
   if (flashOff) flashOff();
+  // Some Android phones reset zoom and lamp after a full photo: put them back.
+  if (plan) {
+    if (zoom.hw && zoom.track) applyCam({ zoom: zoom.cur / zoom.scale });
+    if (facing === 'environment' && curFlash() === 'light') setTorch(true);
+  }
 
   const blob = await toBlobP(c, 'image/jpeg', 0.92);
   if (!blob) return;
