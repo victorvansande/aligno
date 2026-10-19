@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -923,6 +923,7 @@ function requestMotionPermission() {
 }
 
 async function openCamera() {
+  enterCameraFullscreen();
   const p = await dbGetProject(state.projectId);
   if (!p) return;
   $('camProjName').textContent = p.name;
@@ -1220,6 +1221,7 @@ async function startCamera() {
   }
 }
 function stopCamera() {
+  exitCameraFullscreen();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   stopCanvasLoop();
   const c = $('vfCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height);
@@ -1230,40 +1232,38 @@ function stopCamera() {
   setLevel(false);
 }
 
-/* Layout (DESIGN.md §14). T = top bar, V = full-width 3:4 viewfinder,
-   B = modes + shutter row, H = screen height.
-   - T + V + B fits: stacked, nothing overlaps (installed app, tall phones).
-   - Otherwise the viewfinder sits at the bottom of the screen and the
-     modes + shutter row lie on its lower edge. The top bar stays on black
-     when there is room above the picture, and lies on the picture when there
-     is none. If it would end up half on the picture, the picture moves to
-     the top and a thin black strip stays below the controls instead.
-   Zoom steps, overlay slider and messages always sit inside the picture,
-   just clear of whatever lies on top of it. Nothing is ever half on the
-   picture and half on the black. */
+/* Layout (DESIGN.md §14), the standard of every camera app: tools bar at the
+   top, the 3:4 picture right below it, modes and the shutter row on black at
+   the bottom. The picture is full width whenever the screen is tall enough;
+   if not (a browser with toolbars), it gets narrower so that the shutter row
+   never covers it. Only the zoom steps and the overlay slider lie on it. */
 function layoutCamera() {
   const cam = $('screen-camera');
   if (!cam.classList.contains('active')) return;
-  cam.classList.remove('cam-overlay');
-  const H = cam.clientHeight;
-  const T = cam.querySelector('.cam-top').offsetHeight;
-  const B = cam.querySelector('.cam-bottom').offsetHeight;
-  const V = $('vf').offsetWidth * 4 / 3;
-  let topCover = 0, bottomCover = 0;
-  if (T + V + B > H + 1) {
-    let vfTop = H - V, ctlBottom = 0;
-    if (vfTop > 0 && vfTop < T) { vfTop = 0; ctlBottom = H - V; }
-    cam.classList.add('cam-overlay');
-    cam.style.setProperty('--vf-top', vfTop + 'px');
-    cam.style.setProperty('--ctl-bottom', ctlBottom + 'px');
-    // Measure the controls again: on the picture they carry a taller fade.
-    const ctl = cam.querySelector('.cam-bottom'), content = ctl.querySelector('.mode-tabs:not([hidden])') || ctl.querySelector('.cam-controls');
-    const ctlTop = content.getBoundingClientRect().top - cam.getBoundingClientRect().top;
-    topCover = Math.max(0, T - vfTop);
-    bottomCover = Math.max(0, (vfTop + V) - ctlTop);
-  }
-  cam.style.setProperty('--vf-top-pad', (topCover + 12) + 'px');
-  cam.style.setProperty('--vf-bottom-pad', (bottomCover + 12) + 'px');
+  const H = cam.clientHeight, Wd = cam.clientWidth;
+  const full = Math.min(Wd, 600);
+  const fit = () => {
+    const T = cam.querySelector('.cam-top').offsetHeight, B = cam.querySelector('.cam-bottom').offsetHeight;
+    return Math.max(160, Math.floor(Math.min(full, (H - T - B) * 3 / 4)));
+  };
+  cam.classList.remove('vf-narrow');
+  let w = fit();
+  if (w < full - 1) { cam.classList.add('vf-narrow'); w = fit(); }
+  cam.style.setProperty('--vf-w', w + 'px');
+}
+/* In a browser on Android the camera goes full screen, so the toolbars
+   don't take the picture's room. (iPhone browsers don't allow this; there,
+   adding Aligno to the Home Screen gives the full-screen camera.) */
+function enterCameraFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (isStandalone() || IS_IOS || !el.requestFullscreen || document.fullscreenElement) return;
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  } catch (e) {}
+}
+function exitCameraFullscreen() {
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch (e) {}
 }
 
 function toBlobP(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
@@ -2770,6 +2770,8 @@ function wire() {
   // room on screen: re-pick the live mode and the layout.
   $('video').addEventListener('resize', () => { if (state.screen === 'camera' && stream) chooseLiveMode(); });
   window.addEventListener('resize', layoutCamera);
+  if (window.visualViewport) visualViewport.addEventListener('resize', layoutCamera);
+  document.addEventListener('fullscreenchange', () => setTimeout(layoutCamera, 50));
 
   $('fps').addEventListener('input', function () {
     exp.fps = Math.round(this.value); $('fpsv').textContent = exp.fps + ' fps'; saveExportPrefs(); startExportPreview();
