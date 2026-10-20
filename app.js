@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v49';
+const APP_VERSION = 'v50';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -277,7 +277,11 @@ function show(name) {
    the same path in reverse. With Aligno on an iPhone Home Screen you can also
    swipe back from the left edge: the page follows the finger, and a throw far
    enough completes it. */
-const nav = { anim: null, done: null, skip: false };
+const nav = { anim: null, done: null, skip: false, waiters: [] };
+// Resolves once no page is sliding: heavy rendering waits for that, so it
+// never interrupts a slide.
+function navSettled() { return nav.anim ? new Promise(r => nav.waiters.push(r)) : Promise.resolve(); }
+function navFlush() { const w = nav.waiters; nav.waiters = []; w.forEach(r => r()); }
 const NAV_BACK = { project: 'home', settings: 'home', export: 'project', reminders: 'project' };
 function navPlace(top, under, x, W) { // x: how far the top page is from its resting place
   top.style.transform = x > 0.5 ? 'translateX(' + x + 'px)' : '';
@@ -295,7 +299,7 @@ function navSlide(fromEl, toEl, dir) {
   top.classList.add('nav-top'); under.classList.add('nav-under');
   const start = dir === 'push' ? W : 0, end = dir === 'push' ? 0 : W;
   navPlace(top, under, start, W);
-  nav.done = () => { nav.done = null; if (nav.anim) { nav.anim.stop(); nav.anim = null; } navCleanup([fromEl, toEl]); };
+  nav.done = () => { nav.done = null; if (nav.anim) { nav.anim.stop(); nav.anim = null; } navCleanup([fromEl, toEl]); navFlush(); };
   nav.anim = spring({ from: start, to: end, response: 0.42, onUpdate: x => navPlace(top, under, x, W),
     onDone: () => { nav.anim = null; if (nav.done) nav.done(); } });
   return true;
@@ -335,6 +339,7 @@ function wireEdgeBack() {
       nav.anim = null;
       navCleanup([c, u]);
       if (go) { nav.skip = true; goBack(); }
+      navFlush();
     } });
   };
   document.addEventListener('pointerup', end, true);
@@ -466,6 +471,7 @@ function isDue(p, last) {
 }
 
 async function renderHome() {
+  await navSettled(); // never rebuild the list while it slides into view
   const list = $('projectList');
   const projects = (await dbProjects()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!projects.length) {
@@ -2955,6 +2961,7 @@ async function openExport() {
   syncExportUi();
   show('export');
   exp.thumbs = await Promise.all(exp.photos.map(ph => loadImage(urlFor(ph, 'thumb')).catch(() => null)));
+  await navSettled(); // start the moving preview once the page is in place
   startExportPreview();
   syncStab();
 }
@@ -3301,6 +3308,13 @@ async function saveReminder() {
 
 function statCard(v, l) { return '<div class="stat-card"><b>' + v + '</b><span>' + l + '</span></div>'; }
 async function openSettings() {
+  // Open at once; the numbers (which read every photo) follow once the page
+  // has slid in, so they never hold up or interrupt the animation. Until
+  // then the cards keep their size, so nothing jumps.
+  $('verLbl').textContent = 'Aligno ' + APP_VERSION;
+  if (!$('statGrid').children.length) $('statGrid').innerHTML = statCard(' ', 'projects') + statCard(' ', 'photos') + statCard(' ', 'MB used');
+  show('settings');
+  await navSettled();
   const projects = await dbProjects();
   let count = 0, bytes = 0;
   try {
@@ -3312,9 +3326,7 @@ async function openSettings() {
   const mb = bytes / 1048576;
   const mbLabel = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1);
   $('statGrid').innerHTML = statCard(projects.length, 'projects') + statCard(count, 'photos') + statCard(mbLabel, 'MB used');
-  $('verLbl').textContent = 'Aligno ' + APP_VERSION;
   renderBackupInfo();
-  show('settings');
 }
 
 async function wipeAllData() {
@@ -4122,7 +4134,11 @@ async function keepAwake(on) {
     }
   } catch (e) { wakeLock = null; }
 }
-function bootDone() { document.documentElement.classList.remove('booting'); }
+function bootDone() {
+  document.documentElement.classList.remove('booting');
+  // Lists fade in only when the app opens (see .first-paint in the CSS).
+  setTimeout(() => document.documentElement.classList.remove('first-paint'), 1500);
+}
 
 (async function init() {
   try {
