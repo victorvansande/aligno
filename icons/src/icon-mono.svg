@@ -3,7 +3,7 @@
   <defs>
     <mask id="cut">
       <rect width="512" height="512" fill="#fff"/>
-      <path d="M294 256v76M256 294h76" stroke="#000" stroke-width="22" stroke-linecap="round"/>
+      <path d="M305 305L237 237M237 237h56M237 237v56" fill="none" stroke="#000" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
     </mask>
   </defs>
   <g transform="translate(5 5)">

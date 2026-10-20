@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aligno icon check</title>
+<style>
+  /* Dev only: shows every app icon the way each platform presents it. Open
+     http://localhost:5200/tools/icon-preview.html after icons/src/export.ps1. */
+  body{ margin:0; padding:24px; font:14px -apple-system, "Segoe UI", sans-serif; background:#F2F2F5; color:#1C1C1E; }
+  h2{ font-size:15px; margin:24px 0 10px; }
+  .row{ display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end; }
+  .cell{ display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11px; color:#666; }
+  .wall{ padding:18px; border-radius:20px; display:flex; gap:18px; flex-wrap:wrap; }
+  img{ display:block; }
+  .ios{ width:72px; height:72px; border-radius:16px; }
+  .m{ width:72px; height:72px; }
+  .circle{ border-radius:50%; } .sq{ border-radius:22%; } .rr{ border-radius:12px; } .tear{ border-radius:50% 50% 50% 12px; }
+  .tint{ width:72px; height:72px; border-radius:16px; position:relative; overflow:hidden; }
+  .tint img{ width:100%; height:100%; filter:grayscale(1) contrast(1.1); }
+  .tint::after{ content:""; position:absolute; inset:0; mix-blend-mode:color; }
+  .theme{ width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .theme span{ width:100%; height:100%; -webkit-mask:url(../icons/icon-monochrome.png) center/100% no-repeat; mask:url(../icons/icon-monochrome.png) center/100% no-repeat; }
+  .tabs{ display:flex; gap:10px; padding:10px 14px; border-radius:12px; align-items:center; }
+  .tab{ display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:8px; font-size:12px; }
+</style>
+</head>
+<body>
+<h2>iPhone / iPad home screen (apple-touch-icon, iOS rounds the corners)</h2>
+<div class="row">
+  <div class="wall" style="background:linear-gradient(135deg,#9fb7d6,#e6c9b5)">
+    <div class="cell"><img class="ios" src="../icons/apple-touch-icon.png"><span>Default</span></div>
+  </div>
+  <div class="wall" style="background:linear-gradient(135deg,#1b2333,#3b2b3a)">
+    <div class="cell"><img class="ios" src="../icons/apple-touch-icon.png"><span style="color:#ccc">Dark</span></div>
+    <div class="cell"><div class="tint" style="--c:#4A8BFF"><img src="../icons/apple-touch-icon.png"></div><span style="color:#ccc">Tinted (simulated)</span></div>
+    <div class="cell"><div class="tint"><img src="../icons/apple-touch-icon.png" style="filter:grayscale(1) brightness(1.4); opacity:.75"></div><span style="color:#ccc">Clear (simulated)</span></div>
+  </div>
+</div>
+
+<h2>Android adaptive icon (maskable, every launcher shape)</h2>
+<div class="row">
+  <div class="cell"><img class="m circle" src="../icons/icon-512-maskable.png"><span>Circle</span></div>
+  <div class="cell"><img class="m sq" src="../icons/icon-512-maskable.png"><span>Squircle</span></div>
+  <div class="cell"><img class="m rr" src="../icons/icon-512-maskable.png"><span>Rounded square</span></div>
+  <div class="cell"><img class="m tear" src="../icons/icon-512-maskable.png"><span>Teardrop</span></div>
+  <div class="cell"><img class="m" src="../icons/icon-512.png"><span>"any" (desktop)</span></div>
+</div>
+
+<h2>Android themed icons (monochrome, the launcher picks the colours)</h2>
+<div class="row">
+  <div class="cell"><div class="theme" style="background:#DCE6F9"><span style="background:#22426E"></span></div><span>Light theme</span></div>
+  <div class="cell"><div class="theme" style="background:#E7E1D2"><span style="background:#4E4532"></span></div><span>Light, warm</span></div>
+  <div class="cell"><div class="theme" style="background:#26303D"><span style="background:#BFD3F2"></span></div><span>Dark theme</span></div>
+  <div class="cell"><div class="theme" style="background:#2F2A22"><span style="background:#EAD9B5"></span></div><span>Dark, warm</span></div>
+</div>
+
+<h2>Browser tab (favicon)</h2>
+<div class="row">
+  <div class="tabs" style="background:#DEE1E6">
+    <div class="tab" style="background:#fff"><img src="../icons/icon.svg" width="16" height="16">Aligno</div>
+    <div class="tab"><img src="../icons/favicon-16.png" width="16" height="16">16 px png</div>
+    <div class="tab"><img src="../icons/favicon-32.png" width="16" height="16">32 px png at 16</div>
+  </div>
+  <div class="tabs" style="background:#202124; color:#eee">
+    <div class="tab" style="background:#35363A"><img src="../icons/icon.svg" width="16" height="16">Aligno</div>
+    <div class="tab"><img src="../icons/favicon-32.png" width="32" height="32">32 px</div>
+  </div>
+</div>
+<script>
+  // Tinted mode: colour the greyscale icon (iOS 18+ / 26 does this with the user's tint).
+  document.querySelectorAll('.tint[style*="--c"]').forEach(el => { el.style.setProperty('background', el.style.getPropertyValue('--c')); el.querySelector('img').style.mixBlendMode = 'luminosity'; });
+</script>
+</body>
+</html>

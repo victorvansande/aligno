@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v47';
+const APP_VERSION = 'v48';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;

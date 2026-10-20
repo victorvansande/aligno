@@ -289,14 +289,15 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 
 ## 17. App-icoon
 
-- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een vlak grafiet met hooguit een nauwelijks zichtbaar verloop (#2A2A2D → #1C1C1E). **Geen gloed, lichtvlek of schaduw**: het systeem (Liquid Glass op iOS, Material op Android) legt zelf zijn effecten erover.
-- **Bronbestanden** staan in `icons/src/` (`icon-full.svg`, `icon-rounded.svg`, `icon-mono.svg`). Een wijziging aan het icoon gebeurt daar, daarna `powershell -ExecutionPolicy Bypass -File icons/src/export.ps1` (Windows). Nooit losse PNG's met de hand aanpassen.
+- **Eén ontwerp**: het Aligno-teken. Twee kaders: de vorige foto als spookkader (lijn, licht gevuld) linksboven, de nieuwe foto als effen wit kader erover, met een **pijl die naar het spookkader wijst**: schuif je nieuwe foto op de vorige. Geen plus (die leest als "toevoegen"). Wit op vlak grafiet met hooguit een nauwelijks zichtbaar verloop (#2A2A2D → #1C1C1E). **Geen gloed, lichtvlek of schaduw**: het systeem (Liquid Glass op iOS, Material op Android) legt zelf zijn effecten erover. Het in-app-logo (startpagina en kop van Home) is hetzelfde teken.
+- **Bronbestanden** staan in `icons/src/` (`icon-full.svg`, `icon-rounded.svg`, `icon-mono.svg`, `icon-small.svg`). Een wijziging aan het icoon gebeurt daar, daarna `powershell -ExecutionPolicy Bypass -File icons/src/export.ps1` (Windows). Nooit losse PNG's met de hand aanpassen.
 - **Varianten en waarvoor**:
-  - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover.
-  - `icon-192/512-maskable.png`, volle vlak: Android, dat er zelf een vorm uit snijdt (cirkel, squircle, ...). Het teken blijft binnen de veilige zone (cirkel met straal 40% van het midden).
-  - `icon-monochrome.png`, wit op transparant: Android-thema-iconen (kleuren van de achtergrond) en het meldingsicoontje.
-  - `icon-192/512.png`, `icon.svg` en `favicon-32.png`: in de vorm van een app-icoon, een **squircle** (superellips met exponent 5,2: rechte zijden, vloeiende hoeken, zoals iOS en macOS), op 94% van het vlak met wat transparante ruimte rond. Voor het browsertabblad, computers en Chrome. Nooit een gewone afgeronde rechthoek: die oogt op 16 tot 32 px als een vierkant.
-- Een nieuw icoon testen: bekijk alle varianten gemaskeerd als cirkel en squircle, op licht en donker, en op 16 px.
+  - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover (Liquid Glass), en maakt er in de modi **Getint** en **Helder** zelf een grijswaardenversie van. Daarom: één eenvoudig teken met veel contrast (wit op bijna zwart), geen fijne details of kleurverschillen die dan wegvallen.
+  - `icon-192/512-maskable.png`, volle vlak: Android, dat er zelf een vorm uit snijdt (cirkel, squircle, afgeronde rechthoek, druppel). Het teken blijft binnen de veilige zone (cirkel met straal 40% van het midden).
+  - `icon-monochrome.png`, wit op transparant: Android-thema-iconen (de launcher kleurt het in met de kleuren van de achtergrond) en het meldingsicoontje. De pijl is er uitgesneden, zodat hij in elke themakleur leesbaar blijft.
+  - `icon-192/512.png`: in de vorm van een app-icoon, een **squircle** (superellips met exponent 5,2), op 94% van het vlak met wat transparante ruimte rond. Voor computers, Chrome en splash screens.
+  - `icon.svg`, `favicon-32.png` en `favicon-16.png` komen uit `icon-small.svg`: hetzelfde teken, groter in het vlak en met zwaardere lijnen en pijl, zodat het op 16 tot 32 px in een browsertabblad scherp en leesbaar blijft.
+- **Een nieuw icoon testen**: `tools/icon-preview.html` (op localhost) toont elke variant zoals het platform hem toont: iOS standaard, donker, getint en helder; Android in alle vormen en als thema-icoon in lichte en donkere kleuren; en het tabblad op 16 en 32 px, op licht en donker.
 
 ## 18. Uitlijnen meten (Stabilize en live aanwijzing)
 

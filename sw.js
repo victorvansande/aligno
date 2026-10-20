@@ -1,4 +1,4 @@
-const CACHE = 'aligno-v47';
+const CACHE = 'aligno-v48';
 const SHARE_CACHE = 'aligno-share';
 const META_CACHE = 'aligno-meta';
 const ASSETS = [
@@ -12,7 +12,8 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   './icons/icon.svg',
-  './icons/favicon-32.png'
+  './icons/favicon-32.png',
+  './icons/favicon-16.png'
 ];
 
 self.addEventListener('install', (e) => {

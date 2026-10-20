@@ -41,11 +41,12 @@ function Resize([string]$from, [string]$to, [int]$size, [bool]$opaque) {
   "  $to ($size px)"
 }
 
-$full = Join-Path $tmp 'full.png'; $rounded = Join-Path $tmp 'rounded.png'; $mono = Join-Path $tmp 'mono.png'
-Remove-Item $full, $rounded, $mono -ErrorAction SilentlyContinue
+$full = Join-Path $tmp 'full.png'; $rounded = Join-Path $tmp 'rounded.png'; $mono = Join-Path $tmp 'mono.png'; $small = Join-Path $tmp 'small.png'
+Remove-Item $full, $rounded, $mono, $small -ErrorAction SilentlyContinue
 Render 'icon-full.svg' $full
 Render 'icon-rounded.svg' $rounded
 Render 'icon-mono.svg' $mono
+Render 'icon-small.svg' $small
 
 'Writing icons:'
 Resize $full 'apple-touch-icon.png' 180 $true      # iPhone / iPad home screen (iOS rounds the corners)
@@ -53,7 +54,8 @@ Resize $full 'icon-512-maskable.png' 512 $true     # Android adaptive icon (any 
 Resize $full 'icon-192-maskable.png' 192 $true
 Resize $rounded 'icon-512.png' 512 $false          # computers, splash screens, "any"
 Resize $rounded 'icon-192.png' 192 $false
-Resize $rounded 'favicon-32.png' 32 $false         # browser tab fallback
+Resize $small 'favicon-32.png' 32 $false           # browser tab fallback (bolder small version)
+Resize $small 'favicon-16.png' 16 $false
 Resize $mono 'icon-monochrome.png' 512 $false      # Android themed icons
-Copy-Item (Join-Path $src 'icon-rounded.svg') (Join-Path $out 'icon.svg') -Force
+Copy-Item (Join-Path $src 'icon-small.svg') (Join-Path $out 'icon.svg') -Force
 '  icon.svg (browser tab, scalable)'
