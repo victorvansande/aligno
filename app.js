@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -267,6 +267,86 @@ function show(name) {
   if (typeof syncHistory === 'function' && $('photoView')) syncHistory();
 }
 
+/* --- Motion (DESIGN.md §8): everything you drag follows the finger 1:1 and,
+   when let go, continues as a spring: from where it is right now, at the
+   speed of the finger, to where the throw is heading. A spring can be
+   grabbed again mid-way, so nothing ever has to finish before you can act. */
+function reducedMotion() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+/* Springs as Apple describes them: response = roughly how many seconds to
+   get there, damping 1 = no overshoot (the default), below 1 = a little
+   bounce (only after a throw). Returns a handle: stop(), value, velocity.
+   A timer finishes the job if frames stop running (page in the background),
+   so a spring can never leave the interface stuck halfway. */
+function spring(o) {
+  const response = o.response || 0.35, damping = o.damping === undefined ? 1 : o.damping, to = o.to;
+  const k = Math.pow(2 * Math.PI / response, 2), c = 4 * Math.PI * damping / response;
+  const h = { value: o.from, velocity: o.v || 0, done: false, raf: 0, timer: 0 };
+  const finish = () => {
+    if (h.done) return;
+    h.done = true; cancelAnimationFrame(h.raf); clearTimeout(h.timer);
+    h.value = to; h.velocity = 0; o.onUpdate(to);
+    if (o.onDone) o.onDone();
+  };
+  h.stop = () => { h.done = true; cancelAnimationFrame(h.raf); clearTimeout(h.timer); };
+  if (reducedMotion() || o.from === to && !h.velocity) { finish(); return h; }
+  const span = Math.max(1e-3, Math.abs(to - o.from), Math.abs(h.velocity) * 0.05);
+  let last = performance.now();
+  const step = now => {
+    if (h.done) return;
+    let dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+    // Small fixed steps keep the spring stable on any frame rate.
+    while (dt > 0) {
+      const s = Math.min(dt, 1 / 240), a = -k * (h.value - to) - c * h.velocity;
+      h.velocity += a * s; h.value += h.velocity * s; dt -= s;
+    }
+    if (Math.abs(h.value - to) < span * 0.002 && Math.abs(h.velocity) < span * 0.02) { finish(); return; }
+    o.onUpdate(h.value);
+    h.raf = requestAnimationFrame(step);
+  };
+  h.raf = requestAnimationFrame(step);
+  h.timer = setTimeout(finish, response * 4000 + 300);
+  return h;
+}
+// Finger speed in px per second, from the last 80 ms of movement (not the
+// average of the whole drag, which would ignore a quick flick at the end).
+function velocityTracker() {
+  const pts = [];
+  return {
+    add(x, t) { pts.push({ x, t }); while (pts.length > 2 && t - pts[0].t > 80) pts.shift(); },
+    get() {
+      if (pts.length < 2) return 0;
+      const a = pts[0], b = pts[pts.length - 1];
+      return b.t > a.t ? (b.x - a.x) / (b.t - a.t) * 1000 : 0;
+    }
+  };
+}
+// Where a throw would come to rest (Apple's scroll deceleration).
+function projectThrow(v, rate) { rate = rate || 0.998; return (v / 1000) * rate / (1 - rate); }
+// Past an edge the thing follows less and less: soft, never a hard stop.
+function rubberband(over, dim) { const c = 0.55; return (over * dim * c) / (dim + c * Math.abs(over)); }
+/* Haptics: a short tick on meaningful moments only (photo taken, a swipe
+   that will delete, lined up). Android: the Vibration API. iPhone has none,
+   but flipping a hidden switch (iOS 18 and later) gives the system tick; that
+   only works during a tap, so on iPhone a tick without a tap stays silent. */
+let hapticEl = null;
+function haptic(ms) {
+  if (navigator.vibrate) { try { navigator.vibrate(ms || 10); } catch (e) {} return; }
+  if (!IS_IOS) return;
+  try {
+    if (!hapticEl) {
+      hapticEl = document.createElement('label');
+      hapticEl.className = 'haptic';
+      hapticEl.setAttribute('aria-hidden', 'true');
+      const i = document.createElement('input');
+      i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
+      hapticEl.appendChild(i);
+      hapticEl.addEventListener('click', e => e.stopPropagation());
+      document.body.appendChild(hapticEl);
+    }
+    hapticEl.click();
+  } catch (e) {}
+}
+
 /* --- Home: project list, due badges, swipe to delete. --- */
 function reminderInterval(p) {
   return { daily: 1, weekly: 7, monthly: 30 }[String((p && p.reminder) || '').toLowerCase()] || 0;
@@ -315,73 +395,72 @@ async function renderHome() {
    the card slides off it, and the trash icon grows with the drag (--p).
    A quick flick opens or closes; dragging past the button meets resistance. */
 const SWIPE_W = 88;
-const SWIPE_EASE = 'transform .34s cubic-bezier(.2,.9,.25,1)';
-function setSwipe(wrap, x, animate) {
+// Puts the card at x (0 = closed, -SWIPE_W = open); the trash icon follows (--p).
+function setSwipe(wrap, x) {
   const card = wrap.querySelector('.pcard');
-  card.style.transition = animate ? SWIPE_EASE : 'none';
-  wrap.classList.toggle('animating', !!animate);
+  wrap._x = x;
+  card.style.transition = 'none';
   wrap.style.setProperty('--p', Math.min(1, Math.max(0, -x / SWIPE_W)).toFixed(3));
-  clearTimeout(wrap._clrT);
-  if (x === 0) {
-    card.style.transform = '';
-    const done = () => { card.style.transition = ''; wrap.classList.remove('sw', 'animating'); };
-    if (animate) wrap._clrT = setTimeout(done, 340); else done();
-  } else {
-    wrap.classList.add('sw');
-    card.style.transform = 'translateX(' + x + 'px)';
-  }
+  if (Math.abs(x) < 0.5) { card.style.transform = ''; wrap.classList.remove('sw'); }
+  else { wrap.classList.add('sw'); card.style.transform = 'translateX(' + x + 'px)'; }
+}
+// Lets the card spring to open or closed, from where it is, at speed v (px/s).
+function settleSwipe(wrap, open, v) {
+  if (wrap._spring) wrap._spring.stop();
+  wrap._swOpen = open;
+  wrap._spring = spring({ from: wrap._x || 0, to: open ? -SWIPE_W : 0, v: v || 0, response: 0.32,
+    damping: Math.abs(v || 0) > 400 ? 0.92 : 1, onUpdate: x => setSwipe(wrap, x) });
 }
 function closeOtherSwipes(except) {
   document.querySelectorAll('.pswipe').forEach(w => {
-    if (w !== except && w._swOpen) { w._swOpen = false; setSwipe(w, 0, true); }
+    if (w !== except && w._swOpen) settleSwipe(w, false, 0);
   });
 }
 function wireSwipeCard(wrap) {
   const link = wrap.querySelector('[data-open]');
-  let startX = 0, startY = 0, baseX = 0, x = 0, dragging = false, moved = false, armed = false, lastX = 0, lastT = 0, vel = 0;
-  wrap._swOpen = false;
+  let startX = 0, startY = 0, baseX = 0, x = 0, dragging = false, moved = false, armed = false, id = null, vt = null;
+  wrap._swOpen = false; wrap._x = 0;
   wrap.addEventListener('pointerdown', e => {
     if (e.target.closest('.pdel')) return;
-    dragging = true; moved = false;
-    startX = e.clientX; startY = e.clientY; baseX = wrap._swOpen ? -SWIPE_W : 0; x = baseX;
-    armed = wrap._swOpen; lastX = e.clientX; lastT = e.timeStamp; vel = 0;
+    // Grabbed while still moving: continue from where it is now.
+    if (wrap._spring) wrap._spring.stop();
+    dragging = true; moved = false; id = e.pointerId;
+    startX = e.clientX; startY = e.clientY; baseX = wrap._x || 0; x = baseX;
+    armed = baseX < -SWIPE_W / 2;
+    vt = velocityTracker(); vt.add(e.clientX, e.timeStamp);
     closeOtherSwipes(wrap);
   });
   wrap.addEventListener('pointermove', e => {
-    if (!dragging) return;
+    if (!dragging || e.pointerId !== id) return;
     const dx = e.clientX - startX, dy = e.clientY - startY;
     if (!moved && Math.hypot(dx, dy) < 8) return;
     if (!moved && Math.abs(dy) > Math.abs(dx)) { dragging = false; return; }
-    moved = true;
+    if (!moved) { moved = true; try { wrap.setPointerCapture(id); } catch (er) {} }
     let nx = baseX + dx;
-    if (nx < -SWIPE_W) nx = -SWIPE_W - Math.pow(-SWIPE_W - nx, 0.8) * 0.35;
-    if (nx > 0) nx = Math.pow(nx, 0.7) * 0.3;
+    if (nx < -SWIPE_W) nx = -SWIPE_W + rubberband(nx + SWIPE_W, wrap.offsetWidth);
+    if (nx > 0) nx = rubberband(nx, wrap.offsetWidth);
     x = nx;
-    const dt = e.timeStamp - lastT;
-    if (dt > 0) vel = 0.8 * ((e.clientX - lastX) / dt) + 0.2 * vel;
-    lastX = e.clientX; lastT = e.timeStamp;
+    vt.add(e.clientX, e.timeStamp);
     const nowArmed = x < -SWIPE_W / 2;
-    if (nowArmed !== armed) { armed = nowArmed; if (navigator.vibrate) { try { navigator.vibrate(6); } catch (er) {} } }
-    setSwipe(wrap, x, false);
+    if (nowArmed !== armed) { armed = nowArmed; haptic(6); }
+    setSwipe(wrap, x);
   });
-  function endDrag() {
-    if (!dragging) return;
+  function endDrag(e) {
+    if (!dragging || (e && e.pointerId !== id)) return;
     dragging = false;
     if (!moved) return;
-    let open = x < -SWIPE_W / 2;
-    if (vel < -0.35) open = true;
-    if (vel > 0.35) open = false;
-    wrap._swOpen = open;
-    setSwipe(wrap, open ? -SWIPE_W : 0, true);
+    // Where the throw is heading decides, not where the finger let go.
+    const v = vt.get();
+    settleSwipe(wrap, x + projectThrow(v, 0.985) < -SWIPE_W / 2, v);
     // Swallow only the click that the drag itself may produce.
     link._justSwiped = true;
     setTimeout(() => { link._justSwiped = false; }, 250);
   }
   wrap.addEventListener('pointerup', endDrag);
-  wrap.addEventListener('pointercancel', () => { if (dragging) { dragging = false; wrap._swOpen = false; setSwipe(wrap, 0, true); } });
+  wrap.addEventListener('pointercancel', e => { if (dragging && e.pointerId === id) { dragging = false; settleSwipe(wrap, false, 0); } });
   link.addEventListener('click', (e) => {
     if (link._justSwiped) { link._justSwiped = false; e.preventDefault(); e.stopPropagation(); return; }
-    if (wrap._swOpen) { wrap._swOpen = false; setSwipe(wrap, 0, true); return; }
+    if (wrap._swOpen) { settleSwipe(wrap, false, 0); return; }
     openProject(link.getAttribute('data-open'));
   });
 }
@@ -849,7 +928,7 @@ function alignTick() {
   const s = align.ema, ge = geoError();
   const ok = (align.ok ? s >= 0.74 : s >= 0.8) || (ge !== null && ge < (align.ok ? 0.8 : 0.5));
   if (ok && !align.ok) {
-    if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
+    haptic(10);
     if (!align.told) { align.told = true; camBadge('Lined up with your last photo'); }
   }
   align.ok = ok;
@@ -1105,7 +1184,7 @@ function shutterPressed() {
   const tick = () => {
     if (n <= 0) { cancelCountdown(); capturePhoto(); return; }
     cd.innerHTML = '<span>' + n + '</span>';
-    if (navigator.vibrate && n <= 3) { try { navigator.vibrate(8); } catch (e) {} }
+    if (n <= 3) haptic(8);
     n--;
     countdownT = setTimeout(tick, 1000);
   };
@@ -1786,7 +1865,7 @@ async function grabFullPhoto(plan, v) {
   } catch (e) { return null; }
 }
 async function takePhoto(v) {
-  if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+  haptic(15);
   const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.9';
   requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; });
 
@@ -2171,7 +2250,7 @@ async function alUsePhoto() {
     if (p) { p.updatedAt = Date.now(); await dbPutProject(p); }
     alState.added++;
     alState.ghostUrl = baked.dataUrl;
-    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+    haptic(15);
     alBadge('Aligned ' + alState.added + (alState.added === 1 ? ' photo' : ' photos'));
   } catch (e) {}
   $('alUse').disabled = false;
@@ -2214,15 +2293,26 @@ function createProjectAndImport() {
 
 /* --- Photo viewer: swipe through the series, fix dates, share, delete. --- */
 let viewList = [], viewIndex = 0;
-function openPhotoViewAt(i) {
+/* Opens photo i. opts.from: the thumbnail it was tapped on, so the photo
+   grows out of it (and later shrinks back into it). opts.enter + opts.v: a
+   swipe brought it in from that side at that speed. */
+function openPhotoViewAt(i, opts) {
   if (!viewList.length) return;
+  opts = opts || {};
   const wasOpen = $('photoView').classList.contains('on'), prev = viewIndex;
   viewIndex = Math.max(0, Math.min(i, viewList.length - 1));
-  // Moving to the next or previous photo slides it in from that side.
-  if (wasOpen && viewIndex !== prev && $('photoViewImg').animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const d = viewIndex > prev ? 1 : -1;
-    $('photoViewImg').animate([{ opacity: 0, transform: 'translateX(' + (d * 48) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+  const img = $('photoViewImg');
+  if (wasOpen && viewIndex !== prev) {
+    const d = viewIndex > prev ? 1 : -1, w = $('pvStage').clientWidth || innerWidth;
+    if (opts.enter) {
+      // Continues the swipe: the new photo comes in from the edge at the finger's speed.
+      if (pv.anim) pv.anim.stop();
+      pv.anim = spring({ from: d * w, to: 0, v: opts.v || 0, response: 0.32, onUpdate: x => pvPlace(x, 0, 1) });
+    } else if (img.animate && !reducedMotion()) {
+      img.animate([{ opacity: 0, transform: 'translateX(' + (d * 48) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+    }
   }
+  if (!wasOpen) pvPlace(0, 0, 1);
   const ph = viewList[viewIndex];
   $('photoViewImg').src = urlFor(ph, 'full');
   $('photoViewCap').innerHTML = (viewIndex + 1) + ' of ' + viewList.length + ' · ' + fmtFullDate(ph.ts) +
@@ -2231,10 +2321,147 @@ function openPhotoViewAt(i) {
   $('pvNext').hidden = viewIndex >= viewList.length - 1;
   $('photoView').classList.add('on');
   setTheme(true);
+  if (!wasOpen && opts.from) pvZoom(true, opts.from);
 }
 function closePhotoView() {
-  $('photoView').classList.remove('on');
+  const tile = pvTile();
+  if (tile && !pv.closing) { pvZoom(false, tile.getBoundingClientRect(), { x: pv.x, y: pv.y, s: pv.s }); return; }
+  pvFinishClose();
+}
+function pvFinishClose() {
+  if (pv.anim) { pv.anim.stop(); pv.anim = null; }
+  pv.closing = false;
+  $('photoView').classList.remove('on', 'zooming');
+  pvPlace(0, 0, 1); pvFade(1);
   setTheme(state.screen === 'camera');
+}
+
+/* Viewer gestures, like the Photos app. Sideways: the photo follows the finger
+   1:1 (resisting at the first and last), and a throw far enough moves to the
+   next one, which continues at the finger's speed. Down: the photo follows
+   the finger and shrinks a little while the black fades; far enough and it
+   flies back into its thumbnail in the grid. Anything else springs back. */
+const pv = { x: 0, y: 0, s: 1, anim: null, closing: false };
+function pvPlace(x, y, s, clip) {
+  pv.x = x; pv.y = y; pv.s = s;
+  const img = $('photoViewImg');
+  img.style.transform = x || y || s !== 1 ? 'translate(' + x + 'px,' + y + 'px) scale(' + s + ')' : '';
+  img.style.clipPath = clip || '';
+}
+function pvFade(a) {
+  const v = $('photoView');
+  v.style.setProperty('--pv-a', a.toFixed(3));
+  v.style.setProperty('--pv-c', Math.max(0, a * 1.4 - 0.4).toFixed(3));
+}
+// The grid thumbnail of the photo on show, if it is on screen.
+function pvTile() {
+  if (viewList !== projPhotos || state.screen !== 'project') return null;
+  const t = $('photoGrid').querySelector('[data-i="' + viewIndex + '"]');
+  if (!t) return null;
+  const r = t.getBoundingClientRect();
+  return r.bottom > 0 && r.top < innerHeight && r.width ? t : null;
+}
+/* Grows the photo out of the thumbnail rect (open) or back into it (close).
+   The photo is cropped to the square of the thumbnail while it is small, the
+   way the grid shows it. `start`: where a drag left the photo. */
+async function pvZoom(open, rect, start) {
+  const view = $('photoView'), img = $('photoViewImg');
+  if (reducedMotion()) { if (!open) pvFinishClose(); return; }
+  view.classList.add('zooming');
+  if (open) { pvFade(0); img.style.opacity = '0'; try { await img.decode(); } catch (e) {} img.style.opacity = ''; }
+  pvPlace(0, 0, 1);
+  const r = img.getBoundingClientRect();
+  if (!r.width) { view.classList.remove('zooming'); pvFade(1); if (!open) pvFinishClose(); return; }
+  const s = Math.max(rect.width / r.width, rect.height / r.height);
+  const tx = rect.left + rect.width / 2 - (r.left + r.width / 2), ty = rect.top + rect.height / 2 - (r.top + r.height / 2);
+  const ix = (r.width - rect.width / s) / 2, iy = (r.height - rect.height / s) / 2;
+  const a = start || { x: 0, y: 0, s: 1 };
+  const apply = p => { // p = 1: full photo (or where the drag left it), 0: in the thumbnail
+    const q = 1 - p;
+    pvPlace(a.x * p + tx * q, a.y * p + ty * q, a.s * p + s * q,
+      'inset(' + (iy * q).toFixed(1) + 'px ' + (ix * q).toFixed(1) + 'px round ' + (12 * q / s).toFixed(1) + 'px)');
+  };
+  if (!open) pv.closing = true;
+  const a0 = open ? 1 : Number(view.style.getPropertyValue('--pv-a') || 1);
+  if (pv.anim) pv.anim.stop();
+  pv.anim = spring({ from: open ? 0 : 1, to: open ? 1 : 0, response: 0.36, onUpdate: p => {
+    apply(p);
+    pvFade(open ? p : a0 * p);
+  }, onDone: () => {
+    pv.anim = null;
+    if (open) { view.classList.remove('zooming'); pvPlace(0, 0, 1); pvFade(1); } else pvFinishClose();
+  } });
+}
+function wireViewerGestures() {
+  const stage = $('pvStage'), view = $('photoView');
+  let id = null, x0 = 0, y0 = 0, mode = null, vx = null, vy = null, bx = 0;
+  stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('button') || pv.closing || id !== null) return;
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; mode = null;
+    // Caught mid-way: continue from where the photo is now.
+    if (pv.anim) { pv.anim.stop(); pv.anim = null; view.classList.remove('zooming'); }
+    bx = pv.x;
+    if (bx) mode = 'x';
+    vx = velocityTracker(); vy = velocityTracker();
+    vx.add(e.clientX, e.timeStamp); vy.add(e.clientY, e.timeStamp);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    vx.add(e.clientX, e.timeStamp); vy.add(e.clientY, e.timeStamp);
+    if (!mode) {
+      if (Math.hypot(dx, dy) < 10) return;
+      mode = Math.abs(dx) > Math.abs(dy) ? 'x' : dy > 0 ? 'y' : 'none';
+      try { stage.setPointerCapture(id); } catch (er) {}
+    }
+    if (mode === 'x') {
+      const w = stage.clientWidth;
+      let x = bx + dx;
+      const atStart = viewIndex === 0, atEnd = viewIndex >= viewList.length - 1;
+      if ((x > 0 && atStart) || (x < 0 && atEnd)) x = rubberband(x, w);
+      pvPlace(x, 0, 1);
+    } else if (mode === 'y') {
+      const h = view.clientHeight, y = Math.max(0, dy);
+      pvPlace(dx * 0.6, dy < 0 ? rubberband(dy, h) : dy, 1 - Math.min(0.35, y / h * 0.6));
+      pvFade(Math.max(0, 1 - y / (h * 0.5)));
+    }
+  });
+  const end = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (!mode || mode === 'none') return;
+    view._dragged = true;
+    setTimeout(() => { view._dragged = false; }, 60);
+    if (mode === 'x') {
+      const w = stage.clientWidth, v = vx.get(), aim = pv.x + projectThrow(v, 0.99);
+      const dir = aim < -w * 0.35 ? 1 : aim > w * 0.35 ? -1 : 0;
+      const next = viewIndex + dir;
+      if (dir && next >= 0 && next < viewList.length) {
+        // Out the side it is going, then the next photo carries on.
+        pv.anim = spring({ from: pv.x, to: -dir * w, v, response: 0.25, onUpdate: x => pvPlace(x, 0, 1),
+          onDone: () => { pv.anim = null; openPhotoViewAt(next, { enter: true, v }); } });
+      } else {
+        pv.anim = spring({ from: pv.x, to: 0, v, response: 0.3, onUpdate: x => pvPlace(x, 0, 1), onDone: () => { pv.anim = null; } });
+      }
+    } else {
+      const h = view.clientHeight, v = vy.get();
+      if (pv.y + projectThrow(v, 0.99) > h * 0.22) {
+        const tile = pvTile();
+        if (tile) pvZoom(false, tile.getBoundingClientRect(), { x: pv.x, y: pv.y, s: pv.s });
+        else {
+          pv.closing = true;
+          const sx = pv.x, ss = pv.s, y0 = pv.y, a0 = Number(view.style.getPropertyValue('--pv-a') || 1);
+          pv.anim = spring({ from: y0, to: h, v, response: 0.3, onUpdate: y => { pvPlace(sx, y, ss); pvFade(a0 * Math.max(0, 1 - (y - y0) / Math.max(1, h - y0))); }, onDone: pvFinishClose });
+        }
+      } else {
+        const sx = pv.x, sy = pv.y, ss = pv.s, a0 = Number(view.style.getPropertyValue('--pv-a') || 1);
+        pv.anim = spring({ from: 0, to: 1, response: 0.3, onUpdate: p => { pvPlace(sx * (1 - p), sy * (1 - p), ss + (1 - ss) * p); pvFade(a0 + (1 - a0) * p); },
+          onDone: () => { pv.anim = null; } });
+      }
+    }
+  };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
 }
 function localInputValue(ts) {
   const d = new Date(ts), z = (n) => String(n).padStart(2, '0');
@@ -3348,13 +3575,25 @@ function askPersistentStorage() {
    anywhere on the sheet while it is scrolled to the top (not on inputs or
    sliders); far or fast enough closes it the same way as tapping outside, so
    every sheet runs its own closing logic. */
+/* Sheets follow the finger down (and resist upwards); the dimmed backdrop
+   lightens along. On release the throw decides: heading far enough down
+   closes it, otherwise it springs back, both from where it is now and at the
+   finger's speed. Grabbing it again mid-way just continues the drag. */
 function wireSheetDrag() {
   document.querySelectorAll('.modal-bg > .sheet').forEach(sheet => {
     const bg = sheet.parentElement;
-    let y0 = 0, x0 = 0, dy = 0, t0 = 0, active = false, dragging = false, id = null;
+    let y0 = 0, x0 = 0, dy = 0, base = 0, active = false, dragging = false, id = null, vt = null, anim = null;
+    const place = y => {
+      dy = y;
+      sheet.style.transform = Math.abs(y) < 0.5 ? '' : 'translateY(' + y + 'px)';
+      bg.style.opacity = y > 0 ? String(Math.max(0, 1 - y / Math.max(1, sheet.offsetHeight))) : '';
+    };
     sheet.addEventListener('pointerdown', e => {
       if (e.target.closest('input, textarea, select') || sheet.scrollTop > 0) return;
-      active = true; dragging = false; dy = 0; y0 = e.clientY; x0 = e.clientX; t0 = e.timeStamp; id = e.pointerId;
+      active = true; dragging = false; y0 = e.clientY; x0 = e.clientX; id = e.pointerId;
+      base = anim && !anim.done ? anim.value : 0;
+      if (anim) { anim.stop(); anim = null; if (base) { dragging = true; sheet.classList.add('dragging'); } }
+      vt = velocityTracker(); vt.add(e.clientY, e.timeStamp);
     });
     sheet.addEventListener('pointermove', e => {
       if (!active || e.pointerId !== id) return;
@@ -3364,24 +3603,30 @@ function wireSheetDrag() {
         if (d < 8) return;
         dragging = true;
         sheet.classList.add('dragging');
-        try { sheet.setPointerCapture(id); } catch (er) {}
       }
-      dy = Math.max(0, d);
-      sheet.style.transform = 'translateY(' + dy + 'px)';
+      try { sheet.setPointerCapture(id); } catch (er) {}
+      vt.add(e.clientY, e.timeStamp);
+      const y = base + d;
+      place(y < 0 ? rubberband(y, sheet.offsetHeight) : y);
     });
     const end = e => {
       if (!active || e.pointerId !== id) return;
       active = false;
       if (!dragging) return;
-      sheet.classList.remove('dragging');
-      const v = dy / Math.max(1, e.timeStamp - t0);
+      const v = vt.get(), h = sheet.offsetHeight;
       sheet._dragged = true;
       setTimeout(() => { sheet._dragged = false; }, 50);
-      if (dy > Math.min(140, sheet.offsetHeight * 0.3) || v > 0.6) {
-        sheet.style.transform = '';
-        bg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      if (dy + projectThrow(v, 0.99) > h * 0.4) {
+        // Out the way it is going, then the sheet closes as usual (Cancel).
+        anim = spring({ from: dy, to: h + 24, v, response: 0.3, onUpdate: place, onDone: () => {
+          anim = null;
+          bg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          // Reset once the backdrop has faded out.
+          setTimeout(() => { sheet.classList.remove('dragging'); place(0); }, 340);
+        } });
       } else {
-        sheet.style.transform = '';
+        anim = spring({ from: dy, to: 0, v, response: 0.3, damping: Math.abs(v) > 400 ? 0.85 : 1, onUpdate: place,
+          onDone: () => { anim = null; sheet.classList.remove('dragging'); } });
       }
     };
     sheet.addEventListener('pointerup', end);
@@ -3393,6 +3638,11 @@ function wireSheetDrag() {
 
 /* --- Wiring: every event listener of the static markup. --- */
 function wire() {
+  // Top bars turn into glass once content scrolls under them.
+  document.addEventListener('scroll', e => {
+    const c = e.target;
+    if (c && c.classList && c.classList.contains('content') && c.parentElement) c.parentElement.classList.toggle('scrolled', c.scrollTop > 2);
+  }, { capture: true, passive: true });
   $('startBtn').addEventListener('click', () => { try { localStorage.setItem('aligno_seen', '1'); } catch (e) {} show('home'); });
   $('newProjectBtn').addEventListener('click', () => openNewProjectModal(false));
   $('newCancel').addEventListener('click', closeNewProjectModal);
@@ -3499,7 +3749,10 @@ function wire() {
   alViewport.addEventListener('wheel', alOnWheel, { passive: false });
 
   $('photoViewClose').addEventListener('click', closePhotoView);
-  $('photoView').addEventListener('click', (e) => { if (e.target === $('photoView') || e.target.id === 'pvStage' || e.target.id === 'photoViewImg') closePhotoView(); });
+  $('photoView').addEventListener('click', (e) => {
+    if ($('photoView')._dragged) return; // the end of a swipe is not a tap
+    if (e.target === $('photoView') || e.target.id === 'pvStage' || e.target.id === 'photoViewImg') closePhotoView();
+  });
   $('pvPrev').addEventListener('click', () => openPhotoViewAt(viewIndex - 1));
   $('pvNext').addEventListener('click', () => openPhotoViewAt(viewIndex + 1));
   $('pvDelete').addEventListener('click', deleteViewedPhoto);
@@ -3509,21 +3762,11 @@ function wire() {
   $('dateCancel').addEventListener('click', () => $('dateModal').classList.remove('on'));
   $('dateSave').addEventListener('click', saveDateEdit);
   $('dateModal').addEventListener('click', e => { if (e.target === $('dateModal')) $('dateModal').classList.remove('on'); });
-  let tX = null, tY = null;
-  $('photoView').addEventListener('touchstart', e => { tX = e.touches[0].clientX; tY = e.touches[0].clientY; }, { passive: true });
-  $('photoView').addEventListener('touchend', e => {
-    if (tX === null) return;
-    const dx = e.changedTouches[0].clientX - tX;
-    const dy = e.changedTouches[0].clientY - tY;
-    tX = null; tY = null;
-    if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
-      if (dx < 0) openPhotoViewAt(viewIndex + 1); else openPhotoViewAt(viewIndex - 1);
-    }
-  }, { passive: true });
+  wireViewerGestures();
   $('photoGrid').addEventListener('click', (e) => {
     const t = e.target.closest('[data-i]'); if (!t) return;
     viewList = projPhotos;
-    openPhotoViewAt(+t.getAttribute('data-i'));
+    openPhotoViewAt(+t.getAttribute('data-i'), { from: t.getBoundingClientRect() });
   });
 
   $('flipBtn').addEventListener('click', () => { facing = (facing === 'environment') ? 'user' : 'environment'; zoom.lens = 'main'; startCamera(); });

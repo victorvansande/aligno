@@ -70,8 +70,15 @@
   .app{ position:fixed; inset:0; display:flex; flex-direction:column; }
   .screen{ position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg); }
   .screen.active{ display:flex; }
-  .topbar{ display:flex; align-items:center; gap:var(--s-1); min-height:calc(env(safe-area-inset-top) + 64px);
+  /* The top bar floats over the content (DESIGN.md §6): at the top of a page it is invisible; once the
+     content scrolls under it, it becomes frosted glass that fades out at its lower edge (no hard line). */
+  .topbar{ position:absolute; top:0; left:0; right:0; z-index:4; display:flex; align-items:center; gap:var(--s-1); min-height:calc(env(safe-area-inset-top) + 64px);
     padding:calc(env(safe-area-inset-top) + var(--s-3)) var(--gutter) var(--s-2); }
+  .topbar::before{ content:""; position:absolute; inset:0 0 -14px; z-index:-1; pointer-events:none; opacity:0; transition:opacity var(--t-base);
+    background:color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    -webkit-mask-image:linear-gradient(#000 calc(100% - 14px), transparent); mask-image:linear-gradient(#000 calc(100% - 14px), transparent); }
+  .screen.scrolled .topbar::before{ opacity:1; }
+  .topbar + .content{ padding-top:calc(env(safe-area-inset-top) + 64px + var(--s-2)); }
   .topbar .ttl{ flex:1; min-width:0; font-size:var(--fs-title); font-weight:600; line-height:var(--lh-tight); letter-spacing:-.02em;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .content{ flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
@@ -138,7 +145,6 @@
   .pswipe.sw .pdel{ visibility:visible; }
   .pdel-in{ width:88px; display:flex; flex-direction:column; align-items:center; gap:var(--s-1); font-size:var(--fs-label); font-weight:600;
     opacity:var(--p, 0); transform:scale(calc(.55 + .45 * var(--p, 0))); }
-  .pswipe.animating .pdel-in{ transition:opacity .34s, transform .34s cubic-bezier(.2,.9,.25,1); }
 
   .panel, .hero, .ld-demo{ background:var(--surface-2); border-radius:var(--r-lg); padding:var(--s-4); }
 
@@ -549,10 +555,13 @@
   /* Photo viewer: close on top, the photo in between, caption and actions
      below it, all on black. Nothing lies on the photo (DESIGN.md §9). */
   .photoview{ position:fixed; top:0; left:0; right:0; height:100%; height:100dvh; z-index:60; display:none; flex-direction:column;
-    background:#060809; color:var(--on-dark); }
+    background:rgba(6,8,9,var(--pv-a, 1)); color:var(--on-dark); }
   .photoview.on{ display:flex; }
   .pv-top{ flex:none; display:flex; justify-content:flex-end; padding:calc(env(safe-area-inset-top) + var(--s-2)) var(--gutter) var(--s-2); }
-  .pv-stage{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; gap:var(--s-3); }
+  .pv-stage{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; gap:var(--s-3); touch-action:none; }
+  .pv-top, .pv-cap, .pv-bar{ opacity:var(--pv-c, 1); }
+  .photoview.zooming{ animation:none; }
+  .pv-stage > img{ will-change:transform; }
   .pv-stage > img{ display:block; min-width:0; max-width:100%; max-height:100%; object-fit:contain; }
   .pv-close, .pv-nav{ flex:none; width:var(--tap); height:var(--tap); border:none; border-radius:50%; cursor:pointer;
     background:rgba(255,255,255,.12); color:var(--on-dark); display:flex; align-items:center; justify-content:center;
@@ -616,9 +625,26 @@
   .pswipe, .ptile, .hero, .due-banner{ animation:listIn var(--t-slow) ease backwards; }
   .landing-logo{ animation:logoPop .5s var(--ease); }
   .countdown span{ animation:cdPop 1s ease both; }
+
+  /* Less motion: nothing slides, scales or bounces, but things still fade in
+     and out briefly, so you keep seeing what changed. Springs in app.js jump
+     straight to the end. */
   @media (prefers-reduced-motion: reduce){
-    *, *::before, *::after{ animation-duration:1ms !important; animation-delay:0s !important; transition-duration:1ms !important; }
+    @keyframes screenIn{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes pushIn{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes popIn{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes sheetUp{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes listIn{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes badgePop{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes logoPop{ from{ opacity:0; } to{ opacity:1; } }
+    *, *::before, *::after{ animation-delay:0s !important; transition-duration:var(--t-fast) !important; }
+    .modal-bg:not(.on) .sheet{ transform:none; }
+    .focus-ring.on, .focus-ring.hold{ animation:fadeIn var(--t-fast) both; }
   }
+  /* Every tappable thing answers the moment it is pressed, not on release. */
+  .seg button:active:not(:disabled), .mode-tabs button:active, .ptile:active, .libchip button:active, .hint:active, .guide:active{ scale:.96; }
+  .haptic{ position:fixed; left:-100px; top:0; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
+  .modal-bg:has(.sheet.dragging){ transition:none; }
 
   /* ---- 8. Dark theme: follows the system unless picked in Settings ---- */
   @media (prefers-color-scheme: dark){
@@ -642,6 +668,17 @@
     --pill-bg:#F1F1F5; --pill-fg:#0D0D12;
     --sh-1:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); --sh-2:0 8px 32px rgba(0,0,0,.5);
     color-scheme:dark;
+  }
+  /* ---- Accessibility settings of the device ----
+     Less transparency: glass becomes solid. More contrast: firmer lines and
+     secondary text closer to the main text. (:not(#_) wins over the themes.) */
+  @media (prefers-reduced-transparency: reduce){
+    :root:not(#_){ --glass-dark:rgba(28,30,33,.96); --glass-light:var(--surface); --scrim:rgba(11,11,16,.7); }
+    .topbar::before{ background:var(--bg); }
+    *, *::before, *::after{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+  }
+  @media (prefers-contrast: more){
+    :root:not(#_){ --text-3:var(--text-2); --line:var(--line-strong); --glass-dark:rgba(20,20,24,.9); }
   }
 </style>
 <script>

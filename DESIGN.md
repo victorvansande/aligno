@@ -102,6 +102,7 @@ Regels:
 
 ## 6. Diepte
 
+- **De bovenbalk zweeft over de inhoud** (materiaal, zoals iOS): bovenaan een pagina is hij onzichtbaar; zodra de inhoud eronder schuift, wordt hij matglas (`backdrop-filter`) dat aan de onderrand zacht wegvloeit. Geen harde scheidingslijn.
 - `--sh-1`: rustende kaart (kaarten, ghost-knoppen, tegels).
 - `--sh-2`: zwevend (sheets, toasts, update-melding).
 - `--sh-accent`: alleen de primaire knop.
@@ -134,11 +135,17 @@ Regels:
 - Indrukken: knoppen, kaarten en rijen schalen naar 0.97, ronde iconknoppen naar 0.92.
 - Een scherm komt binnen met 8px omhoog en vervagen. Een sheet schuift van onder.
 - **Navigatie heeft een richting**: dieper gaan (project, export) schuift van rechts in, terug schuift van links in, schermen op hetzelfde niveau vervagen (`DEPTH` in `show()`).
-- **Sheets** schuiven omhoog bij openen en weer omlaag bij sluiten, en zijn met de vinger naar beneden weg te trekken (ver of snel genoeg = sluiten, anders veert hij terug). Wegtrekken telt altijd als Annuleren.
+- **Alles wat je sleept, volgt je vinger 1:1 en is een veer bij het loslaten** (`spring()` in app.js, naar Apple's *Designing Fluid Interfaces*): de beweging start waar het ding nu staat, met de snelheid van je vinger (`velocityTracker()`, gemeten over de laatste 80 ms), en gaat naar waar de worp naartoe gaat (`projectThrow()`), niet naar waar je losliet. Standaard zonder doorschieten (damping 1); een klein beetje veren (0.92) alleen na een snelle worp. Nooit vaste CSS-duur of `@keyframes` voor iets dat je met de vinger bedient.
+- **Altijd onderbreekbaar**: je kan alles midden in een beweging weer vastpakken en het gaat verder vanaf waar het is. Nooit invoer blokkeren tijdens een animatie.
+- **Zachte randen**: voorbij een grens volgt iets steeds minder (`rubberband()`), nooit een harde stop. Sheets omhoog trekken, vegen voorbij de rode knop, de eerste of laatste foto in de viewer.
+- **Sheets** schuiven omhoog bij openen en zijn met de vinger naar beneden weg te trekken; de verduistering licht mee op. Een worp die ver genoeg gaat sluit hem (dat telt als Annuleren), anders veert hij terug.
 - **Vegen om te verwijderen** werkt zoals iOS Mail: de rode laag ligt achter de hele kaart, de kaart schuift erover weg, het icoon groeit mee met de beweging, een snelle veeg is genoeg, verder trekken voelt weerstand. Na bevestigen schuift de kaart weg en sluit de lijst zich vloeiend.
-- **In de fotoviewer** schuift de volgende of vorige foto in vanuit die kant.
-- **Een animatie houdt nooit een actie tegen**: als een animatie niet afspeelt (pagina op de achtergrond), gaat de actie na korte tijd toch door.
-- Wie "minder beweging" aanzet op het toestel, krijgt geen animaties (`prefers-reduced-motion`).
+- **De fotoviewer werkt zoals Foto's**: een foto groeit open uit zijn miniatuur en krimpt er bij sluiten weer in (ruimtelijk consistent: hij gaat weg langs de weg waarlangs hij kwam). Opzij vegen volgt de vinger en de volgende foto neemt de snelheid over; omlaag vegen laat de foto krimpen terwijl het zwart vervaagt, en ver genoeg vliegt hij terug in het raster.
+- **Indrukken reageert meteen** (bij aanraken, niet bij loslaten): elke knop, tab, tegel en pil schaalt licht (0.96 tot 0.97).
+- **Haptiek** (`haptic()`) alleen op betekenisvolle momenten: foto genomen, een veeg die gaat verwijderen, aftellen, uitgelijnd. Android via de Vibration API; iPhone (iOS 18+) via een verborgen schakelaar, wat alleen werkt tijdens een tik.
+- **Een animatie houdt nooit een actie tegen**: als een animatie niet afspeelt (pagina op de achtergrond), gaat de actie na korte tijd toch door. Elke veer heeft daarvoor een vangnet-timer.
+- **Minder beweging** (`prefers-reduced-motion`): niets schuift, schaalt of veert meer, maar dingen vervagen nog kort in en uit, zodat je blijft zien wat er veranderde. Veren springen meteen naar het einde.
+- **Minder transparantie** (`prefers-reduced-transparency`): glas wordt effen. **Meer contrast** (`prefers-contrast: more`): stevigere lijnen en grijze tekst dichter bij de hoofdtekst.
 
 ## 9. Opbouw van een scherm
 
