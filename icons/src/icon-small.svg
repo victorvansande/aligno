@@ -4,8 +4,9 @@
        Rounded square without a margin: a tab has no room to spare. -->
   <rect width="512" height="512" rx="120" fill="#1C1C1E"/>
   <g transform="translate(256 256) scale(1.2) translate(-256 -256)">
-    <rect x="133" y="133" width="190" height="190" rx="54" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-opacity=".9" stroke-width="36"/>
-    <rect x="199" y="199" width="190" height="190" rx="54" fill="#fff"/>
-    <path d="M336 336L254 254M254 254h66M254 254v66" fill="none" stroke="#1C1C1E" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="133" y="133" width="190" height="190" rx="54" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-opacity=".9" stroke-width="36" mask="url(#under)"/>
+    <rect x="199" y="199" width="190" height="190" rx="54" fill="#fff" mask="url(#hole)"/>
+    <mask id="under"><rect width="512" height="512" fill="#fff"/><rect x="199" y="199" width="190" height="190" rx="54" fill="#000"/></mask>
+    <mask id="hole"><rect width="512" height="512" fill="#fff"/><path d="M336 336L254 254M254 254h66M254 254v66" fill="none" stroke="#000" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/></mask>
   </g>
 </svg>
