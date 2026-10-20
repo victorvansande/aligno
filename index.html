@@ -655,6 +655,11 @@
   .screen.active{ animation:screenIn var(--t-slow) var(--ease); }
   .screen.active.push{ animation:pushIn var(--t-slow) var(--ease); }
   .screen.active.pop{ animation:popIn var(--t-slow) var(--ease); }
+  /* During a slide (navSlide, edge swipe) the spring owns the transform. A CSS
+     animation would override it for its whole duration, so the page would fade
+     in place and then jump to wherever the spring had got to. nav-done keeps
+     it off after the slide, or removing nav-top would start it from zero. */
+  .screen.active.nav-top, .screen.active.nav-under, .screen.active.nav-done{ animation:none; }
   .cam.active, .photoview.on, .cmpview.on, .modal-bg.on{ animation:fadeIn var(--t-base) ease; }
   .modal-bg.on .sheet{ animation:sheetUp var(--t-slow) var(--ease); }
   /* Lists fade in once, when the app opens; never during navigation (that would fight the slide). */

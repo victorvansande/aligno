@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v53';
+const APP_VERSION = 'v54';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -346,7 +346,7 @@ function show(name) {
     const el = $('screen-' + s);
     if (!el) return;
     const on = s === name;
-    if (on && !el.classList.contains('active')) { el.classList.remove('push', 'pop'); if (dir && !slide) el.classList.add(dir); }
+    if (on && !el.classList.contains('active')) { el.classList.remove('push', 'pop', 'nav-done'); if (dir && !slide) el.classList.add(dir); }
     el.classList.toggle('active', on);
   });
   state.screen = name;
@@ -371,7 +371,7 @@ function navPlace(top, under, x, W) { // x: how far the top page is from its res
   under.style.setProperty('--shade', ((1 - x / W) * 0.18).toFixed(3));
 }
 function navCleanup(els) {
-  els.forEach(el => { el.classList.remove('nav-top', 'nav-under', 'nav-keep'); el.style.transform = ''; el.style.removeProperty('--shade'); });
+  els.forEach(el => { el.classList.remove('nav-top', 'nav-under', 'nav-keep'); el.classList.add('nav-done'); el.style.transform = ''; el.style.removeProperty('--shade'); });
 }
 function navSlide(fromEl, toEl, dir) {
   if (nav.done) nav.done(); // finish a slide that is still running
