@@ -9,7 +9,7 @@ Alle waarden bestaan als CSS-variabelen (tokens) bovenaan `index.html`. In de CS
 ## 1. Karakter
 
 - **Rustig en precies.** Aligno gaat over exact uitlijnen. De interface is strak, voorspelbaar en zonder versiering.
-- **Monochroom met één accentkleur.** Grijswaarden doen het werk. Indigo is alleen voor wat je moet zien of aantikken.
+- **Neutraal, zonder merkkleur.** Grijswaarden doen het werk; het "accent" is grafiet in licht en gebroken wit in donker, zoals de eigen apps van Apple. Een opvallende merkkleur (paars, blauw) oogt al snel als een sjabloon en concurreert met de foto's. Kleur alleen waar ze iets betekent: rood = verwijderen, geel = "Due", groen = uitgelijnd.
 - **De foto's zijn de kleur.** De interface mag nooit concurreren met de foto's van de gebruiker.
 - **Een app, geen website.** Geen zoom, geen tekstselectie, geen sprongen bij het scrollen. Alles reageert onder je vinger.
 
@@ -17,9 +17,10 @@ Alle waarden bestaan als CSS-variabelen (tokens) bovenaan `index.html`. In de CS
 
 | Token | Licht | Donker | Gebruik |
 |---|---|---|---|
-| `--accent` | #5B5FEF | #6C70F6 | Primaire knop, actieve staat, schakelaar aan |
-| `--accent-strong` | #4145C7 | #AEB0FF | Accent als tekst of icoon op een lichte achtergrond |
-| `--accent-soft` | #EEEEFD | #25264A | Achtergrond van geselecteerde rijen, icoontegels, tips |
+| `--accent` | #1C1C1E | #F2F2F5 | Primaire knop, actieve staat, schakelaar aan (neutraal: grafiet of gebroken wit) |
+| `--accent-strong` | #1C1C1E | #F2F2F5 | Accent als tekst of icoon |
+| `--on-accent` | #FFFFFF | #0D0D12 | Tekst en iconen óp een accentvlak (wit in licht, donker in donker) |
+| `--accent-soft` | #EFEFF2 | #232329 | Achtergrond van geselecteerde rijen, icoontegels, tips |
 | `--bg` | #FAFAFB | #0D0D12 | Achtergrond van elk scherm |
 | `--surface` | #FFFFFF | #17171E | Kaarten, rijen, knoppen (ghost), invoervelden |
 | `--surface-2` | #F3F3F6 | #1C1C24 | Ingebedde panelen (hero, uitleg, statistieken) |
@@ -32,11 +33,11 @@ Alle waarden bestaan als CSS-variabelen (tokens) bovenaan `index.html`. In de CS
 | `--danger-text` | #C6392F | #FF7A70 | Rode tekst en iconen |
 | `--warn-bg` / `--warn-text` / `--warn-strong` | geel | geel | Alleen "Due"-meldingen |
 
-**Altijd donkere vlakken** (camera, uitlijner, fotoviewer, vergelijken) gebruiken `--ink` (#0B0B10) als basis, wit (`--on-dark`) en `--on-dark-2` (#EDEDF2) als tekst, en `--glass-dark` voor knoppen. Het accent op zwart is `--accent-on-dark` (#AEB0FF): voor de actieve modus, de actieve zoomstap en ingeschakelde tools. Daar wisselt het thema niet mee: foto's beoordeel je altijd op zwart.
+**Altijd donkere vlakken** (camera, uitlijner, fotoviewer, vergelijken) gebruiken `--ink` (#0B0B10) als basis, wit (`--on-dark`) en `--on-dark-2` (#EDEDF2) als tekst, en `--glass-dark` voor knoppen. Actief op zwart (de actieve modus, de actieve zoomstap, ingeschakelde tools) is een witte pil met donkere tekst of een donker icoon (`--on-dark` met `--ink`), geen kleur. `--accent-on-dark` is wit, voor het scherpstelvierkant en de sluiterring. Daar wisselt het thema niet mee: foto's beoordeel je altijd op zwart.
 
 Regels:
-- Eén primaire (indigo) knop per scherm. Andere acties zijn ghost-knoppen of rijen.
-- Indigo nooit voor lopende tekst. Wel voor één woord of icoon dat een actie aanduidt.
+- Eén primaire (grafiet, in donker wit) knop per scherm. Andere acties zijn ghost-knoppen of rijen.
+- **Licht is de standaard.** Donker en Auto (volgt de gsm) kies je in Instellingen; die keuze wordt onthouden.
 - Rood alleen voor verwijderen. Geel alleen voor "Due".
 - Illustraties (de plant, het huis, het kind in voorbeelden) hebben hun eigen kleuren. Dat zijn "foto's", geen interface.
 - Een nieuwe kleur? Eerst als token toevoegen, in licht én donker, en in deze tabel.
@@ -141,6 +142,7 @@ Regels:
 - **Sheets** schuiven omhoog bij openen en zijn met de vinger naar beneden weg te trekken; de verduistering licht mee op. Een worp die ver genoeg gaat sluit hem (dat telt als Annuleren), anders veert hij terug.
 - **Vegen om te verwijderen** werkt zoals iOS Mail: de rode laag ligt achter de hele kaart, de kaart schuift erover weg, het icoon groeit mee met de beweging, een snelle veeg is genoeg, verder trekken voelt weerstand. Na bevestigen schuift de kaart weg en sluit de lijst zich vloeiend.
 - **De fotoviewer werkt zoals Foto's**: een foto groeit open uit zijn miniatuur en krimpt er bij sluiten weer in (ruimtelijk consistent: hij gaat weg langs de weg waarlangs hij kwam). Opzij vegen volgt de vinger en de volgende foto neemt de snelheid over; omlaag vegen laat de foto krimpen terwijl het zwart vervaagt, en ver genoeg vliegt hij terug in het raster.
+- **Navigatie zoals iOS** (`navSlide()`): een diepere pagina schuift over de volle breedte van rechts in, terwijl de pagina eronder een derde naar links schuift en iets donkerder wordt; terug is exact dezelfde weg omgekeerd. Op een iPhone met Aligno op het beginscherm veeg je vanaf de linkerrand terug, met de vinger mee (in de browser heeft de browser dat gebaar al zelf, en op Android het systeem). Camera en uitlijner blijven vervagen: dat zijn volle-scherm-modi, geen pagina's.- **Een sheet duwt de pagina naar achter**: zolang een sheet open is, krimpt de pagina erachter licht (94%) met afgeronde hoeken op zwart; trek je de sheet omlaag, dan komt de pagina met je vinger mee terug.- **Grote titels**: elke pagina met een titel begint met die naam groot (`--fs-display`, 700) bovenaan de inhoud. Scrolt die weg, dan verschijnt de naam klein en gecentreerd in de glazen balk.
 - **Indrukken reageert meteen** (bij aanraken, niet bij loslaten): elke knop, tab, tegel en pil schaalt licht (0.96 tot 0.97).
 - **Haptiek** (`haptic()`) alleen op betekenisvolle momenten: foto genomen, een veeg die gaat verwijderen, aftellen, uitgelijnd. Android via de Vibration API; iPhone (iOS 18+) via een verborgen schakelaar, wat alleen werkt tijdens een tik.
 - **Een animatie houdt nooit een actie tegen**: als een animatie niet afspeelt (pagina op de achtergrond), gaat de actie na korte tijd toch door. Elke veer heeft daarvoor een vangnet-timer.
@@ -164,7 +166,7 @@ Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties
 
 | Component | Klasse | Specificatie |
 |---|---|---|
-| Primaire knop | `.btn.primary` | 52px hoog, `--r-md`, `--accent`, wit, `--fs-control` |
+| Primaire knop | `.btn.primary` | 52px hoog, `--r-md`, `--accent`, tekst `--on-accent`, `--fs-control` |
 | Ghost-knop | `.btn.ghost` | Zelfde maat, `--surface`, rand `--line-strong`, `--sh-1` |
 | Verwijderknop | `.btn.danger` | Zelfde maat, `--danger`, wit |
 | Iconknop | `.tbtn`, `.backbtn` | 44×44 aanraakzone, icoon 22px, geen achtergrond |
@@ -182,8 +184,8 @@ Een keuze tussen 2 of 3 opties = segment. Aan/uit = schakelaar. Een lijst acties
 | Toast | `.toast` | Pil, `--pill-bg`, onderaan, verdwijnt na 2,6 s |
 | Badge "Due" | `.duechip` | Pil, `--fs-micro`, gele tokens |
 | Melding | `.notice` | Paneel in `--accent-soft`, `--r-lg`, icoon, vette titel + uitleg, en een knop die het oplost (bv. "Take photo") |
-| Zoomstappen | `.zoom-stops` | Glazen pil onderaan in de zoeker, knoppen 36px, actieve stap in `--accent-on-dark` (zie §14) |
-| Modustabs | `.mode-tabs` | Tekstknoppen `--fs-body` 600, actief = `--accent-on-dark` op een lichte pil |
+| Zoomstappen | `.zoom-stops` | Glazen pil onderaan in de zoeker, knoppen 36px, actieve stap = witte pil met donkere tekst (zie §14) |
+| Modustabs | `.mode-tabs` | Tekstknoppen `--fs-body` 600, actief = witte pil met donkere tekst |
 | Tip | `.hint` | Glazen vlak met tekst `--fs-sub` en een ×, een tik sluit hem voorgoed (zie §16) |
 | Feedback | `.cbadge` | Donkere glazen pil bovenaan de zoeker, verdwijnt na 2,4 s |
 
@@ -256,13 +258,13 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - Geen optische zoom beschikbaar: dezelfde stappen als digitale uitsnede, in de zoeker én de bewaarde foto.
 - **Opstarten en wisselen zoals een echte camera**: de zoeker blijft zwart tot het eerste beeld klaar is en het beeld vervaagt dan in; bij wisselen van camera of lens vervaagt (blur) het laatste beeld tot het nieuwe er is. Nooit een flits van een verkeerd geschaald beeld.
 - **Echte lenzen, geen uitsnede**: heeft een toestel een gecombineerde camera (iPhone: "Back Triple Camera", "Back Dual Wide Camera", "Back Dual Camera"), dan gebruikt de app die. Zoomen daarop laat het toestel zelf wisselen naar de echte ultragroothoek-, hoofd- of telelens, net als de eigen camera-app. Safari en Chrome geven de zoom al in de vertrouwde getallen (1 = hoofdlens, ultragroothoek = 0.5): die worden zo gebruikt. Alleen als een gecombineerde camera bij 1 begint terwijl hij een ultragroothoek heeft, rekent `zoom.scale` om (1 = 0.5×). Test dit altijd met beide varianten van nepcamera. De camera opent altijd op 1×. Werkt die camera niet (geen zoom, weigert te starten), dan valt de app stil terug op de gewone hoofdcamera. Een digitale uitsnede alleen als er geen echte lens voor die stap is.
-- **Tik om scherp te stellen en te belichten** waar de browser dat toelaat (Chrome op Android): een vierkantje in `--accent-on-dark` op de plek van de tik; scherpte en belichting gaan naar dat punt. Kan de camera ook belichting bijstellen, dan staat er een zonnetje met de waarde naast het vierkantje en maak je het beeld lichter of donkerder door op het beeld omhoog of omlaag te slepen (zoals op iPhone). Een nieuwe tik zet de belichting terug op 0.
+- **Tik om scherp te stellen en te belichten** waar de browser dat toelaat (Chrome op Android): een wit vierkantje op de plek van de tik; scherpte en belichting gaan naar dat punt. Kan de camera ook belichting bijstellen, dan staat er een zonnetje met de waarde naast het vierkantje en maak je het beeld lichter of donkerder door op het beeld omhoog of omlaag te slepen (zoals op iPhone). Een nieuwe tik zet de belichting terug op 0.
 - **Flits**: achteraan de lamp van het toestel (waar de browser die laat schakelen: Chrome op Android, Safari vanaf iOS 18), met Uit, Auto, Aan en Lamp (blijft branden, om in het donker uit te lijnen). Vooraan licht het scherm warm wit op tijdens de foto. Auto flitst als het beeld donker is. De keuze wordt per camera onthouden.
 - **Volle resolutie waar het kan**: in Chrome op Android neemt de app een echte foto op volle sensorgrootte (tot 4096 px, `ImageCapture.takePhoto()`), met de echte flits als het toestel er een heeft. Safari kan dat niet; daar wordt een beeld uit de live video bewaard. Is de foto traag, anders gedraaid of niet groter dan de video, dan valt de app stil terug op het videobeeld. Dezelfde uitsnede als de zoeker blijft gelden.
 - **Uitlijnscore in de sluiterring**: zolang er een vorige foto is, vullen twee metingen de ring: een snelle vergelijking van het hele beeld (helderheid en randen op 36×48, genormaliseerd, geen AI; alleen hoog als je al heel dicht zit) en de meting van de live aanwijzing (§18), die zegt hoe ver je ernaast staat en dus geleidelijk oploopt terwijl je dichterbij komt, ook bij ander licht. De hoogste telt, en elk van beide kan hem groen maken. De ring vult zich naarmate het beter past; zonder (geladen) vorige foto toont hij niets in plaats van een oud getal en wordt `--level-ok` groen zodra het past, met een korte tril. De melding "Lined up with your last photo" komt maximaal één keer per cameragebruik. In de sluiter zelf staat het percentage (bv. 72%) en een vinkje in `--level-ok-ink` zodra het past, zodat de ring zichzelf uitlegt; de eerste twee keer zegt een korte melding ook wat de ring betekent. Geen extra balken of cijfers op het beeld.
 - **Live aanwijzing ("Step back", "Move left", "Tilt right", "Tilt up")**: één glazen pil bovenaan het beeld, met pijl, één ding tegelijk (de grootste afwijking eerst). Twee bronnen: de **bewegingssensor** (hoe de gsm gekanteld stond bij de vorige foto, bewaard als `tilt` bij elke foto) voor "Tilt left/right" en "Tilt up/down", en het **beeld** (zie §18) voor afstand, opzij en omhoog/omlaag. De sensor is een feit en werkt op elke scène; het beeld spreekt alleen als de meting zeker is. Klopt de kanteling volgens de sensor, dan betekent omhoog/omlaag echt de gsm verplaatsen ("Move up"); klopt ze niet, dan zegt de app "Tilt up/down". Een advies verschijnt pas als het twee keer na elkaar hetzelfde is, en verdwijnt zodra de sluiterring groen is of zolang een andere melding staat. Bij twijfel zegt ze niets: liever stil dan fout. Links en rechts gelden zoals je het scherm ziet, ook bij de gespiegelde frontcamera. Tikken verbergt ze tot de camera opnieuw opent. Op iPhone vraagt de app de bewegingssensor bij het openen van de camera; een weigering wordt onthouden en nooit opnieuw gevraagd.
 - **Alleen tonen wat werkt**: elke camerafunctie (flits, tik om scherp te stellen, belichting, 0.5×) wordt per camera en lens getest via `getCapabilities()`. Kan het niet, dan is de knop of het vierkantje er niet: nooit iets tonen dat niets doet.
-- Toolstatus (raster aan, timer 3 s) zie je aan het icoon in `--accent-on-dark` en een korte feedbackpil, niet aan extra tekstlabels.
+- Toolstatus (raster aan, flits aan, timer 3 s) zie je aan een witte cirkel achter het icoon en een korte feedbackpil, niet aan extra tekstlabels.
 
 ## 15. Illustraties
 
@@ -287,7 +289,7 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 
 ## 17. App-icoon
 
-- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een vlak indigo met hooguit een nauwelijks zichtbaar verloop (#6266F1 → #5357E6). **Geen gloed, lichtvlek of schaduw**: het systeem (Liquid Glass op iOS, Material op Android) legt zelf zijn effecten erover.
+- **Eén ontwerp**: het Aligno-teken (twee uitgelijnde kaders: de nieuwe foto op de vorige) in wit, op een vlak grafiet met hooguit een nauwelijks zichtbaar verloop (#2A2A2D → #1C1C1E). **Geen gloed, lichtvlek of schaduw**: het systeem (Liquid Glass op iOS, Material op Android) legt zelf zijn effecten erover.
 - **Bronbestanden** staan in `icons/src/` (`icon-full.svg`, `icon-rounded.svg`, `icon-mono.svg`). Een wijziging aan het icoon gebeurt daar, daarna `powershell -ExecutionPolicy Bypass -File icons/src/export.ps1` (Windows). Nooit losse PNG's met de hand aanpassen.
 - **Varianten en waarvoor**:
   - `apple-touch-icon.png` 180 px, ondoorzichtig, volle vlak: iPhone/iPad-beginscherm. iOS rondt zelf af en legt zelf het glaseffect erover.

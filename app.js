@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v46';
+const APP_VERSION = 'v47';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -221,7 +221,8 @@ function renderLandingDemo() {
 /* --- App state, theme and screen navigation. --- */
 const state = { screen: 'landing', projectId: null, overlayMode: 'photo' };
 
-function themePref() { try { return localStorage.getItem('aligno_theme') || 'system'; } catch (e) { return 'system'; } }
+// Light unless you chose otherwise in Settings (Auto follows the phone).
+function themePref() { try { return localStorage.getItem('aligno_theme') || 'light'; } catch (e) { return 'light'; } }
 function uiIsDark() {
   const t = themePref();
   if (t === 'dark') return true;
@@ -235,7 +236,7 @@ function setTheme(dark) {
   if (m) m.setAttribute('content', dark ? '#08080b' : (uiIsDark() ? '#0D0D12' : '#ffffff'));
 }
 function applyThemePref(t) {
-  try { if (t === 'system') localStorage.removeItem('aligno_theme'); else localStorage.setItem('aligno_theme', t); } catch (e) {}
+  try { localStorage.setItem('aligno_theme', t); } catch (e) {}
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   syncThemeSeg();
@@ -255,16 +256,122 @@ function show(name) {
   if (state.screen === 'export' && name !== 'export') stopExportPreview();
   const from = DEPTH[state.screen], to = DEPTH[name];
   const dir = name === state.screen ? '' : to > from ? 'push' : to < from ? 'pop' : '';
+  const fromEl = $('screen-' + state.screen), toEl = $('screen-' + name);
+  // Page to page goes like iOS (navSlide); the camera and aligner keep their fade.
+  const slide = !!dir && !nav.skip && navSlide(fromEl, toEl, dir);
+  nav.skip = false;
   screens.forEach(s => {
     const el = $('screen-' + s);
     if (!el) return;
     const on = s === name;
-    if (on && !el.classList.contains('active')) { el.classList.remove('push', 'pop'); if (dir) el.classList.add(dir); }
+    if (on && !el.classList.contains('active')) { el.classList.remove('push', 'pop'); if (dir && !slide) el.classList.add(dir); }
     el.classList.toggle('active', on);
   });
   state.screen = name;
   setTheme(name === 'camera' || name === 'aligner');
   if (typeof syncHistory === 'function' && $('photoView')) syncHistory();
+}
+
+/* Navigation like iOS: a deeper page slides in over the whole width from the
+   right while the page below moves a third to the left and darkens; back is
+   the same path in reverse. With Aligno on an iPhone Home Screen you can also
+   swipe back from the left edge: the page follows the finger, and a throw far
+   enough completes it. */
+const nav = { anim: null, done: null, skip: false };
+const NAV_BACK = { project: 'home', settings: 'home', export: 'project', reminders: 'project' };
+function navPlace(top, under, x, W) { // x: how far the top page is from its resting place
+  top.style.transform = x > 0.5 ? 'translateX(' + x + 'px)' : '';
+  under.style.transform = 'translateX(' + (-(W - x) * 0.3) + 'px)';
+  under.style.setProperty('--shade', ((1 - x / W) * 0.18).toFixed(3));
+}
+function navCleanup(els) {
+  els.forEach(el => { el.classList.remove('nav-top', 'nav-under', 'nav-keep'); el.style.transform = ''; el.style.removeProperty('--shade'); });
+}
+function navSlide(fromEl, toEl, dir) {
+  if (nav.done) nav.done(); // finish a slide that is still running
+  if (!fromEl || !toEl || fromEl === toEl || reducedMotion() || !fromEl.classList.contains('screen') || !toEl.classList.contains('screen')) return false;
+  const W = innerWidth, top = dir === 'push' ? toEl : fromEl, under = dir === 'push' ? fromEl : toEl;
+  fromEl.classList.add('nav-keep');
+  top.classList.add('nav-top'); under.classList.add('nav-under');
+  const start = dir === 'push' ? W : 0, end = dir === 'push' ? 0 : W;
+  navPlace(top, under, start, W);
+  nav.done = () => { nav.done = null; if (nav.anim) { nav.anim.stop(); nav.anim = null; } navCleanup([fromEl, toEl]); };
+  nav.anim = spring({ from: start, to: end, response: 0.42, onUpdate: x => navPlace(top, under, x, W),
+    onDone: () => { nav.anim = null; if (nav.done) nav.done(); } });
+  return true;
+}
+function wireEdgeBack() {
+  // Only where the browser has no back gesture of its own (installed on iPhone).
+  if (!IS_IOS || !isStandalone()) return;
+  let id = null, x0 = 0, y0 = 0, on = false, vt = null, cur = null, under = null;
+  document.addEventListener('pointerdown', e => {
+    const back = NAV_BACK[state.screen];
+    if (e.clientX > 18 || !back || openSheet() || $('photoView').classList.contains('on') || $('cmpView').classList.contains('on')) return;
+    if (nav.done) nav.done();
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; on = false;
+    vt = velocityTracker(); vt.add(e.clientX, e.timeStamp);
+    cur = $('screen-' + state.screen); under = $('screen-' + back);
+  }, true);
+  document.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    vt.add(e.clientX, e.timeStamp);
+    if (!on) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > dx) { id = null; return; }
+      if (dx < 10) return;
+      on = true;
+      cur.classList.add('nav-top', 'nav-keep'); under.classList.add('nav-under', 'nav-keep');
+      try { cur.setPointerCapture(id); } catch (er) {}
+    }
+    navPlace(cur, under, Math.max(0, dx), innerWidth);
+  }, true);
+  const end = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (!on) return;
+    const W = innerWidth, v = vt.get(), x = Math.max(0, e.clientX - x0), c = cur, u = under;
+    const go = x + projectThrow(v, 0.99) > W * 0.5;
+    nav.anim = spring({ from: x, to: go ? W : 0, v, response: 0.35, onUpdate: p => navPlace(c, u, p, W), onDone: () => {
+      nav.anim = null;
+      navCleanup([c, u]);
+      if (go) { nav.skip = true; goBack(); }
+    } });
+  };
+  document.addEventListener('pointerup', end, true);
+  document.addEventListener('pointercancel', end, true);
+}
+
+/* Sheets push the page back, like iOS: while a sheet is open the page behind
+   shrinks a little with rounded corners; pulling the sheet down brings it
+   forward along with the finger (--sheet-p, set in wireSheetDrag). */
+function wireSheetDepth() {
+  const sync = () => {
+    const open = [...document.querySelectorAll('.modal-bg')].some(b => b.classList.contains('on') && !b.classList.contains('top'));
+    document.body.classList.toggle('sheet-open', open);
+    if (!open) document.body.style.removeProperty('--sheet-p');
+  };
+  const mo = new MutationObserver(sync);
+  document.querySelectorAll('.modal-bg').forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class'] }));
+}
+
+/* Large titles, like iOS: a page starts with its name big at the top; once
+   that scrolls away, the name appears small and centred in the bar. */
+function wireLargeTitles() {
+  document.querySelectorAll('.screen > .topbar > .ttl').forEach(ttl => {
+    const content = ttl.closest('.screen').querySelector(':scope > .content');
+    if (!content) return;
+    const big = document.createElement('h1');
+    big.className = 'large-title';
+    big.setAttribute('aria-hidden', 'true');
+    content.insertBefore(big, content.firstChild);
+    const copy = () => { big.textContent = ttl.textContent; };
+    copy();
+    new MutationObserver(copy).observe(ttl, { childList: true, characterData: true, subtree: true });
+  });
+  document.addEventListener('scroll', e => {
+    const c = e.target, big = c && c.querySelector && c.querySelector(':scope > .large-title');
+    if (big) c.parentElement.classList.toggle('titled', c.scrollTop > big.offsetTop + big.offsetHeight - 8);
+  }, { capture: true, passive: true });
 }
 
 /* --- Motion (DESIGN.md §8): everything you drag follows the finger 1:1 and,
@@ -3587,12 +3694,14 @@ function wireSheetDrag() {
       dy = y;
       sheet.style.transform = Math.abs(y) < 0.5 ? '' : 'translateY(' + y + 'px)';
       bg.style.opacity = y > 0 ? String(Math.max(0, 1 - y / Math.max(1, sheet.offsetHeight))) : '';
+      // The page behind comes forward as the sheet goes down (wireSheetDepth).
+      if (!bg.classList.contains('top')) document.body.style.setProperty('--sheet-p', Math.max(0, Math.min(1, 1 - y / Math.max(1, sheet.offsetHeight))).toFixed(3));
     };
     sheet.addEventListener('pointerdown', e => {
       if (e.target.closest('input, textarea, select') || sheet.scrollTop > 0) return;
       active = true; dragging = false; y0 = e.clientY; x0 = e.clientX; id = e.pointerId;
       base = anim && !anim.done ? anim.value : 0;
-      if (anim) { anim.stop(); anim = null; if (base) { dragging = true; sheet.classList.add('dragging'); } }
+      if (anim) { anim.stop(); anim = null; if (base) { dragging = true; sheet.classList.add('dragging'); document.body.classList.add('sheet-drag'); } }
       vt = velocityTracker(); vt.add(e.clientY, e.timeStamp);
     });
     sheet.addEventListener('pointermove', e => {
@@ -3602,7 +3711,7 @@ function wireSheetDrag() {
         if (Math.abs(e.clientX - x0) > 10) { active = false; return; }
         if (d < 8) return;
         dragging = true;
-        sheet.classList.add('dragging');
+        sheet.classList.add('dragging'); document.body.classList.add('sheet-drag');
       }
       try { sheet.setPointerCapture(id); } catch (er) {}
       vt.add(e.clientY, e.timeStamp);
@@ -3622,11 +3731,11 @@ function wireSheetDrag() {
           anim = null;
           bg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
           // Reset once the backdrop has faded out.
-          setTimeout(() => { sheet.classList.remove('dragging'); place(0); }, 340);
+          setTimeout(() => { sheet.classList.remove('dragging'); document.body.classList.remove('sheet-drag'); place(0); }, 340);
         } });
       } else {
         anim = spring({ from: dy, to: 0, v, response: 0.3, damping: Math.abs(v) > 400 ? 0.85 : 1, onUpdate: place,
-          onDone: () => { anim = null; sheet.classList.remove('dragging'); } });
+          onDone: () => { anim = null; sheet.classList.remove('dragging'); document.body.classList.remove('sheet-drag'); } });
       }
     };
     sheet.addEventListener('pointerup', end);
@@ -3638,6 +3747,7 @@ function wireSheetDrag() {
 
 /* --- Wiring: every event listener of the static markup. --- */
 function wire() {
+  wireEdgeBack(); wireSheetDepth(); wireLargeTitles();
   // Top bars turn into glass once content scrolls under them.
   document.addEventListener('scroll', e => {
     const c = e.target;

@@ -21,7 +21,7 @@
 
   /* ---- 1. Tokens ---- */
   :root{
-    --accent:#5B5FEF; --accent-strong:#4145C7; --accent-soft:#EEEEFD; --accent-rgb:91,95,239;
+    --accent:#1C1C1E; --accent-strong:#1C1C1E; --accent-soft:#EFEFF2; --accent-rgb:28,28,30; --on-accent:#FFFFFF;
     --bg:#FAFAFB; --surface:#FFFFFF; --surface-2:#F3F3F6; --line:#EAEAEF; --line-strong:#DDDDE4;
     --text:#131318; --text-2:#65656F; --text-3:#9A9AA4;
     --danger:#D93B30; --danger-text:#C6392F;
@@ -30,7 +30,7 @@
     --glass-dark:rgba(28,30,33,.42); --glass-light:rgba(255,255,255,.88);
     --scrim:rgba(11,11,16,.44); --press:rgba(0,0,0,.06);
     --pill-bg:#0B0B10; --pill-fg:#FFFFFF;
-    --level:#FFD43B; --level-ok:#49E08A; --level-ok-ink:#178A48; --accent-on-dark:#AEB0FF;
+    --level:#FFD43B; --level-ok:#49E08A; --level-ok-ink:#178A48; --accent-on-dark:#FFFFFF;
 
     --fs-display:30px; --fs-title:20px; --fs-headline:17px; --fs-control:16px;
     --fs-body:15px; --fs-sub:13px; --fs-label:12px; --fs-micro:11px;
@@ -43,7 +43,7 @@
 
     --sh-1:0 1px 2px rgba(10,10,20,.04), 0 6px 20px rgba(10,10,20,.05);
     --sh-2:0 8px 32px rgba(10,10,20,.16);
-    --sh-accent:0 4px 16px rgba(var(--accent-rgb),.30);
+    --sh-accent:0 1px 2px rgba(0,0,0,.08);
 
     --h-control:52px; --h-row:56px; --h-seg:44px; --tap:44px;
 
@@ -67,7 +67,7 @@
   .icon{ width:22px; height:22px; flex:none; }
 
   /* ---- 3. Layout ---- */
-  .app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+  .app{ position:fixed; inset:0; display:flex; flex-direction:column; background:#000; }
   .screen{ position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg); }
   .screen.active{ display:flex; }
   /* The top bar floats over the content (DESIGN.md §6): at the top of a page it is invisible; once the
@@ -79,8 +79,24 @@
     -webkit-mask-image:linear-gradient(#000 calc(100% - 14px), transparent); mask-image:linear-gradient(#000 calc(100% - 14px), transparent); }
   .screen.scrolled .topbar::before{ opacity:1; }
   .topbar + .content{ padding-top:calc(env(safe-area-inset-top) + 64px + var(--s-2)); }
-  .topbar .ttl{ flex:1; min-width:0; font-size:var(--fs-title); font-weight:600; line-height:var(--lh-tight); letter-spacing:-.02em;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* iOS-style page title: big at the top of the page (.large-title, made by
+     wireLargeTitles), small and centred in the bar once that scrolled away. */
+  .topbar .ttl{ position:absolute; left:72px; right:72px; bottom:var(--s-2); text-align:center; pointer-events:none;
+    font-size:var(--fs-headline); font-weight:600; line-height:var(--tap); letter-spacing:-.01em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; opacity:0; transition:opacity var(--t-base); }
+  .screen.titled .topbar .ttl{ opacity:1; }
+  .topbar > :last-child:not(.ttl){ margin-left:auto; }
+  .large-title{ font-size:var(--fs-display); font-weight:700; line-height:var(--lh-tight); letter-spacing:-.025em; margin:0 0 var(--s-4);
+    overflow-wrap:anywhere; }
+  /* Navigation (navSlide): both pages stay visible while one slides over the other. */
+  .screen.nav-keep{ display:flex; }
+  .screen.nav-top{ z-index:3; box-shadow:-12px 0 32px rgba(0,0,0,.14); }
+  .screen.nav-under{ z-index:2; }
+  .screen.nav-under::after{ content:""; position:absolute; inset:0; z-index:20; background:#000; opacity:var(--shade, 0); pointer-events:none; }
+  /* A sheet pushes the page back (wireSheetDepth); pulling the sheet down brings it forward again. */
+  .screen{ transform-origin:50% 0; transition:scale var(--t-slow) var(--ease), border-radius var(--t-slow) var(--ease); }
+  body.sheet-open .screen.active{ scale:calc(1 - .06 * var(--sheet-p, 1)); border-radius:calc(var(--r-lg) * var(--sheet-p, 1)); overflow:hidden; }
+  body.sheet-drag .screen{ transition:none; }
   .content{ flex:1; min-width:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
     padding:var(--s-2) var(--gutter) var(--s-6); }
   .footer{ min-width:0; display:flex; flex-direction:column; gap:var(--s-3);
@@ -110,7 +126,7 @@
   .btn:active{ transform:scale(.97); }
   .btn:disabled{ opacity:.45; pointer-events:none; }
   .btn .icon{ width:20px; height:20px; }
-  .btn.primary{ background:var(--accent); color:#fff; box-shadow:var(--sh-accent); }
+  .btn.primary{ background:var(--accent); color:var(--on-accent); box-shadow:var(--sh-accent); }
   .btn.ghost{ background:var(--surface); color:var(--text); border:1px solid var(--line-strong); box-shadow:var(--sh-1); }
   .btn.danger{ background:var(--danger); color:#fff; }
   .btn.block{ width:100%; }
@@ -279,7 +295,7 @@
   .ld-demo-cap{ font-size:var(--fs-sub); color:var(--text-2); }
   .ld-steps{ display:flex; flex-direction:column; gap:var(--s-4); }
   .ld-step{ display:flex; gap:var(--s-3); align-items:flex-start; }
-  .ld-step .num{ width:28px; height:28px; flex:none; border-radius:50%; background:var(--accent); color:#fff;
+  .ld-step .num{ width:28px; height:28px; flex:none; border-radius:50%; background:var(--accent); color:var(--on-accent);
     font-size:var(--fs-sub); font-weight:600; display:flex; align-items:center; justify-content:center; }
   .ld-step b{ display:block; font-size:var(--fs-body); font-weight:600; line-height:var(--lh-snug); }
   .ld-step span{ font-size:var(--fs-sub); color:var(--text-2); line-height:var(--lh-snug); }
@@ -383,9 +399,9 @@
   .ciconbtn{ position:relative; width:var(--tap); height:var(--tap); flex:none; border:none; border-radius:50%; cursor:pointer; color:var(--on-dark);
     display:flex; align-items:center; justify-content:center; transition:transform var(--t-fast) var(--ease); }
   .ciconbtn:active{ transform:scale(.92); }
-  .ciconbtn.act{ background:rgba(var(--accent-rgb),.85); }
+  .ciconbtn.act{ background:var(--on-dark); color:var(--ink); }
   .tmr{ position:absolute; top:-3px; right:-3px; display:none; min-width:18px; height:18px; padding:0 var(--s-1); border-radius:var(--r-pill);
-    background:var(--accent); color:#fff; font-size:var(--fs-micro); font-weight:700; line-height:18px; font-style:normal; }
+    background:var(--ink); color:var(--on-dark); box-shadow:0 0 0 1.5px var(--on-dark); font-size:var(--fs-micro); font-weight:700; line-height:18px; font-style:normal; }
   .tmr.on{ display:block; }
   #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
   #overlay{ position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; transition:opacity .1s; }
@@ -429,7 +445,7 @@
   .cam-seg button{ flex:1; border:none; background:transparent; border-radius:var(--r-sm); cursor:pointer; padding:0 var(--s-1);
     color:var(--on-dark-2); font-size:var(--fs-sub); font-weight:500; display:flex; align-items:center; justify-content:center; gap:6px;
     transition:background var(--t-base); }
-  .cam-seg button.on{ background:rgba(var(--accent-rgb),.92); color:#fff; }
+  .cam-seg button.on{ background:var(--on-dark); color:var(--ink); }
   .cam-slwrap{ display:flex; align-items:center; gap:var(--s-3); min-height:var(--h-seg); margin-bottom:var(--s-4); padding:0 var(--s-4); border-radius:var(--r-md); }
   .cam-slwrap .lbl{ display:flex; align-items:center; gap:6px; white-space:nowrap; color:var(--on-dark-2); font-size:var(--fs-sub); }
   .cam-slwrap .val{ min-width:40px; text-align:right; font-size:var(--fs-sub); font-weight:600; }
@@ -441,7 +457,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s-1); font-size:var(--fs-label); font-weight:500;
     transition:transform var(--t-fast) var(--ease); }
   .cpill:active{ transform:scale(.94); }
-  .cpill.act{ background:rgba(var(--accent-rgb),.9); }
+  .cpill.act{ background:var(--on-dark); color:var(--ink); }
   .cthumb{ width:54px; height:54px; object-fit:cover; cursor:pointer; border-radius:var(--r-sm); border:2.5px solid rgba(255,255,255,.7); background:#222;
     transition:transform var(--t-fast) var(--ease); }
   .cthumb:active{ transform:scale(.92); }
@@ -468,7 +484,7 @@
   .cam.camera.active{ display:flex; flex-direction:column; }
   .camera .cam-top{ position:relative; }
   .ciconbtn:not(.glass){ background:none; }
-  .camera .cam-top .ciconbtn.act{ color:var(--accent-on-dark); }
+  .camera .cam-top .ciconbtn.act{ background:var(--on-dark); color:var(--ink); }
   /* The viewfinder is always full width (3:4). When the screen is short, the
      controls sit over its lower edge, as in native camera apps. */
   /* Standard camera layout: tools bar, then the 3:4 picture as large as fits
@@ -518,8 +534,8 @@
   .zoom-stops button{ min-width:36px; height:36px; padding:0 var(--s-2); border:none; border-radius:var(--r-pill); cursor:pointer;
     background:rgba(0,0,0,.3); color:var(--on-dark); font-size:var(--fs-micro); font-weight:600; transition:color var(--t-base), transform var(--t-fast) var(--ease); }
   .zoom-stops button:active{ transform:scale(.92); }
-  .zoom-stops button.on{ color:var(--accent-on-dark); font-size:var(--fs-label); font-weight:700; }
-  .zoom-stops .match{ display:flex; align-items:center; gap:var(--s-1); background:rgba(var(--accent-rgb),.85); color:#fff; }
+  .zoom-stops button.on{ background:var(--on-dark); color:var(--ink); font-size:var(--fs-label); font-weight:700; }
+  .zoom-stops .match{ display:flex; align-items:center; gap:var(--s-1); background:rgba(255,255,255,.22); color:var(--on-dark); }
   .camera .cam-top{ z-index:6; padding-top:calc(env(safe-area-inset-top) + var(--s-2)); padding-bottom:var(--s-2); }
   .cam-bottom{ position:relative; z-index:6; flex:none; display:flex; flex-direction:column; gap:var(--s-2); padding:var(--s-2) var(--gutter) calc(env(safe-area-inset-bottom) + var(--s-4)); }
   .cam-slider{ align-self:stretch; display:flex; align-items:center; gap:var(--s-3); min-height:40px; padding:0 var(--s-4); border-radius:var(--r-pill);
@@ -531,7 +547,7 @@
   .mode-tabs{ display:flex; justify-content:center; gap:var(--s-1); }
   .mode-tabs button{ min-height:36px; padding:0 var(--s-4); border:none; border-radius:var(--r-pill); cursor:pointer; background:none;
     color:var(--on-dark-3); font-size:var(--fs-body); font-weight:600; transition:color var(--t-base), background var(--t-base); }
-  .mode-tabs button.on{ color:var(--accent-on-dark); background:rgba(255,255,255,.08); }
+  .mode-tabs button.on{ color:var(--ink); background:var(--on-dark); }
   .camera .cam-controls{ padding-top:var(--s-1); }
   .flipbtn{ width:48px; height:48px; }
   .cam-side .cthumb{ width:48px; height:48px; }
@@ -599,7 +615,7 @@
   .cmp-th img{ display:block; width:100%; height:100%; object-fit:cover; opacity:.75; }
   .cmp-th.a, .cmp-th.b{ outline-color:#fff; }
   .cmp-th.a img, .cmp-th.b img{ opacity:1; }
-  .cmp-th i{ position:absolute; left:3px; bottom:3px; display:none; padding:3px 5px; border-radius:var(--r-xs); background:var(--accent); color:#fff;
+  .cmp-th i{ position:absolute; left:3px; bottom:3px; display:none; padding:3px 5px; border-radius:var(--r-xs); background:var(--accent); color:var(--on-accent);
     font-style:normal; font-size:var(--fs-micro); font-weight:700; line-height:1; }
   .cmp-th.a i.ia, .cmp-th.b i.ib{ display:block; }
   .cmp-th.a.b i.ib{ left:auto; right:3px; }
@@ -649,7 +665,7 @@
   /* ---- 8. Dark theme: follows the system unless picked in Settings ---- */
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --accent:#6C70F6; --accent-strong:#AEB0FF; --accent-soft:#25264A; --accent-rgb:108,112,246;
+      --accent:#F2F2F5; --accent-strong:#F2F2F5; --accent-soft:#232329; --accent-rgb:242,242,245; --on-accent:#0D0D12;
       --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
       --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
       --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
@@ -660,7 +676,7 @@
     }
   }
   :root[data-theme="dark"]{
-    --accent:#6C70F6; --accent-strong:#AEB0FF; --accent-soft:#25264A; --accent-rgb:108,112,246;
+    --accent:#F2F2F5; --accent-strong:#F2F2F5; --accent-soft:#232329; --accent-rgb:242,242,245; --on-accent:#0D0D12;
     --bg:#0D0D12; --surface:#17171E; --surface-2:#1C1C24; --line:#25252E; --line-strong:#33333E;
     --text:#F1F1F5; --text-2:#A3A3AF; --text-3:#6E6E7A;
     --danger-text:#FF7A70; --warn-bg:#3A2D10; --warn-text:#F2D9A4; --warn-strong:#F4C66A;
@@ -683,7 +699,7 @@
 </style>
 <script>
   // Theme before first paint, and keep the app hidden until init picked the right screen (no flash of the intro).
-  try { var t = localStorage.getItem('aligno_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  try { var t = localStorage.getItem('aligno_theme') || 'light'; if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
   document.documentElement.classList.add('booting');
   setTimeout(function () { document.documentElement.classList.remove('booting'); }, 2500);
 </script>
@@ -695,7 +711,7 @@
     <div class="content">
       <div class="ld-hero">
         <div class="landing-logo">
-          <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="#8C8FF6" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="var(--accent)"/><path d="M24 20v8M20 24h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 48 48" fill="none"><rect x="8.5" y="8.5" width="22" height="22" rx="7.5" stroke="currentColor" stroke-opacity=".4" stroke-width="3"/><rect x="17.5" y="17.5" width="22" height="22" rx="7.5" fill="var(--accent)"/><path d="M24 20v8M20 24h8" stroke="var(--on-accent)" stroke-width="2.6" stroke-linecap="round"/></svg>
         </div>
         <h1 class="landing-word">Aligno</h1>
         <p class="landing-tag">Take the same photo, perfectly aligned, every time, so change over time is easy to see.</p>
@@ -728,7 +744,7 @@
   <section class="screen" id="screen-home">
     <div class="topbar">
       <span class="brand">
-        <svg width="29" height="29" viewBox="0 0 24 24" fill="none"><rect x="4.2" y="4.2" width="11" height="11" rx="3.8" stroke="#8C8FF6" stroke-width="1.6"/><rect x="8.8" y="8.8" width="11" height="11" rx="3.8" fill="var(--accent)"/><path d="M12 10v4M10 12h4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="29" height="29" viewBox="0 0 24 24" fill="none"><rect x="4.2" y="4.2" width="11" height="11" rx="3.8" stroke="currentColor" stroke-opacity=".4" stroke-width="1.6"/><rect x="8.8" y="8.8" width="11" height="11" rx="3.8" fill="var(--accent)"/><path d="M12 10v4M10 12h4" stroke="var(--on-accent)" stroke-width="1.5" stroke-linecap="round"/></svg>
         Aligno
       </span>
       <button class="tbtn-pill" id="installBtn" hidden>Install</button>
