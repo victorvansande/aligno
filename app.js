@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v54';
+const APP_VERSION = 'v55';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -193,27 +193,35 @@ function buildIll(stage) {
     '<circle cx="6" cy="28.6" r="1.6" fill="#5FAE6E"/><circle cx="5.5" cy="28.1" r=".7" fill="#77C185"/>');
 }
 
-function moonIll(p) {
-  const bg = '#1D2447', off = f1(p * 15.5);
+// Fitness progress, front view against a wall: shoulders and arms grow, the
+// waist narrows, the person stands on the same spot in every frame.
+function fitIll(g) {
+  const sh = 5.4 + g * 2.4, wa = 4.7 - g * 0.9, arm = 2.2 + g * 1.3, f = f1;
+  const torso = 'M' + f(20 - sh) + ' 14.6Q' + f(20 - sh) + ' 12.6 ' + f(22 - sh) + ' 12.6H' + f(18 + sh) + 'Q' + f(20 + sh) + ' 12.6 ' + f(20 + sh) + ' 14.6L' + f(20 + wa) + ' 23H' + f(20 - wa) + 'z';
   return svg40(
-    '<rect width="40" height="40" fill="' + bg + '"/><circle cx="20" cy="17" r="10.5" fill="#F3EBD2" opacity=".07"/>' +
-    '<circle cx="20" cy="17" r="7.5" fill="#F3EBD2"/><circle cx="17.5" cy="15" r="1.4" fill="#E4D9B9"/><circle cx="22.5" cy="19.5" r="1.9" fill="#E4D9B9"/><circle cx="21.6" cy="13.4" r=".9" fill="#E4D9B9"/>' +
-    '<circle cx="' + f1(20 - +off) + '" cy="17" r="7.7" fill="' + bg + '"/>' +
-    '<circle cx="5" cy="6" r=".5" fill="#fff" opacity=".8"/><circle cx="34" cy="5" r=".6" fill="#fff" opacity=".9"/><circle cx="35" cy="20" r=".4" fill="#fff" opacity=".6"/><circle cx="7" cy="24" r=".4" fill="#fff" opacity=".6"/>' +
-    '<path d="M0 34c7-3.5 13-3.5 20-1.5S33 34 40 31v9H0z" fill="#141934"/>'
+    '<rect width="40" height="40" fill="#EEF0F6"/><rect x="5" y="3" width="30" height="31" rx="2" fill="#F7F8FB"/>' +
+    '<rect y="34.5" width="40" height="5.5" fill="#D9D2C6"/><ellipse cx="20" cy="34.8" rx="6.5" ry=".9" fill="#000" opacity=".1"/>' +
+    '<path d="M' + f(20 - sh + 1) + ' 14.2L' + f(19.2 - sh) + ' 24" stroke="#F2C6A6" stroke-width="' + f(arm) + '" stroke-linecap="round"/>' +
+    '<path d="M' + f(19 + sh) + ' 14.2L' + f(20.8 + sh) + ' 24" stroke="#E3AF8D" stroke-width="' + f(arm) + '" stroke-linecap="round"/>' +
+    '<rect x="18.9" y="10.8" width="2.2" height="2.4" fill="#E3AF8D"/><circle cx="20" cy="8.8" r="2.9" fill="#F2C6A6"/>' +
+    '<path d="M17.1 8.6a2.9 2.9 0 0 1 5.8 0c-1.5-1.1-3.6-1.3-5.8 0z" fill="#5C3F31"/>' +
+    '<rect x="' + f(20.4 - wa) + '" y="26" width="2.4" height="8.4" rx="1" fill="#F2C6A6"/><rect x="' + f(17.2 + wa) + '" y="26" width="2.4" height="8.4" rx="1" fill="#E3AF8D"/>' +
+    '<path d="' + torso + '" fill="#5B8DCF"/><path d="M' + f(20 + sh * 0.3) + ' 12.6H' + f(18 + sh) + 'Q' + f(20 + sh) + ' 12.6 ' + f(20 + sh) + ' 14.6L' + f(20 + wa) + ' 23H' + f(20 + wa * 0.3) + 'z" fill="#4E7DBD"/>' +
+    '<path d="M' + f(19.7 - wa) + ' 22.6H' + f(20.3 + wa) + 'L' + f(20.6 + wa) + ' 27.2H20.7L20 25.4l-.7 1.8H' + f(19.4 - wa) + 'z" fill="#3E4A6B"/>' +
+    '<rect x="' + f(20 - wa) + '" y="33.8" width="3" height="1.1" rx=".5" fill="#2F3546"/><rect x="' + f(17 + wa) + '" y="33.8" width="3" height="1.1" rx=".5" fill="#2F3546"/>'
   );
 }
 
 // Each example plays as a time-lapse in the new project sheet: the subject
 // stays put and only the change moves, which is the whole point of Aligno.
 const EXAMPLES = [
-  { name: 'House build', label: 'Building', desc: 'Bare studs to a finished home',
+  { label: 'Building', desc: 'Bare studs to a finished home',
     when: ['Month 1', 'Month 2', 'Month 4', 'Month 6', 'Month 8'], frames: [0, 1, 2, 3, 4].map(buildIll) },
-  { name: 'Growing up', label: 'A child', desc: 'Same spot, every birthday',
+  { label: 'A child', desc: 'Same spot, every birthday',
     when: ['Age 2', 'Age 4', 'Age 6', 'Age 8', 'Age 10'], frames: [0.1, 0.3, 0.55, 0.8, 1].map(personIll) },
-  { name: 'The moon', label: 'The moon', desc: 'Crescent to full moon',
-    when: ['Night 3', 'Night 5', 'Night 8', 'Night 11', 'Night 14'], frames: [0.2, 0.4, 0.6, 0.8, 1].map(moonIll) },
-  { name: 'Living room plant', label: 'Plant', desc: 'Seedling to bloom',
+  { label: 'Fitness', desc: 'Same pose, same mirror, every week',
+    when: ['Week 1', 'Week 4', 'Week 8', 'Week 12', 'Week 16'], frames: [0, 0.25, 0.5, 0.75, 1].map(fitIll) },
+  { label: 'Plant', desc: 'Seedling to bloom',
     when: ['Week 1', 'Week 3', 'Week 6', 'Week 9', 'Week 12'], frames: [0.12, 0.35, 0.55, 0.8, 1].map(plantIll) }
 ];
 // Placeholder ideas for the project name; a different one each time the sheet opens.
@@ -228,9 +236,9 @@ function renderExamples() {
   const el = $('exampleList');
   if (!el) return;
   el.innerHTML = EXAMPLES.map(e =>
-    '<button class="ex" data-name="' + escapeHtml(e.name) + '"><span class="ex-anim">' +
+    '<div class="ex"><span class="ex-anim">' +
     e.frames.map((f, j) => '<span class="ex-af' + (j ? '' : ' on') + '">' + f + '</span>').join('') + '</span>' +
-    '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span><span class="ex-when">' + e.when[0] + '</span></span></button>'
+    '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span><span class="ex-when">' + e.when[0] + '</span></span></div>'
   ).join('');
   $('exampleDots').innerHTML = EXAMPLES.map((e, i) =>
     '<button class="ex-dot' + (i ? '' : ' on') + '" data-page="' + i + '" aria-label="' + e.label + '"></button>').join('');
@@ -872,7 +880,6 @@ function openNewProjectModal(thenCamera) {
   $('projName').value = '';
   const ideas = NAME_IDEAS.filter(n => 'e.g. ' + n !== $('projName').placeholder);
   $('projName').placeholder = 'e.g. ' + ideas[Math.floor(Math.random() * ideas.length)];
-  $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
   $('exampleList').scrollLeft = 0;
   $('newModal').classList.add('on');
   exStart();
@@ -3861,12 +3868,6 @@ function wire() {
   renderExamples();
   wireExamplePager();
   renderLandingDemo();
-  $('exampleList').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-name]'); if (!b) return;
-    $('projName').value = b.getAttribute('data-name');
-    $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
-    b.classList.add('sel');
-  });
 
   document.querySelectorAll('[data-nav="home"]').forEach(el => el.addEventListener('click', () => { show('home'); renderHome(); }));
   $('projMoreBtn').addEventListener('click', openProjectMore);
