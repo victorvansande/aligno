@@ -66,6 +66,8 @@ for m in re.finditer(r'font-size:\s*([^;}]+)', css):
         errors.append(f'index.html:{css_line0 + css.count(chr(10), 0, m.start())}: font-size {v} is not a --fs-* token')
 for m in re.finditer(r'border-radius:\s*([^;}]+)', css):
     v = m.group(1).strip()
+    if v.startswith('calc(') and 'var(--r-' in v:
+        continue  # a token scaled at runtime, e.g. the page corner behind a sheet
     if any(p not in ('0', '50%') and not p.startswith('var(--r-') for p in v.split()):
         errors.append(f'index.html:{css_line0 + css.count(chr(10), 0, m.start())}: border-radius {v} is not a --r-* token')
 

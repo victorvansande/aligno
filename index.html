@@ -263,12 +263,27 @@
   .empty-strip .ex-ar{ font-size:var(--fs-title); margin:0 var(--s-2); }
 
   /* Illustrated example strips (new project sheet, landing, empty home) */
-  .examples{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s-2); margin-bottom:var(--s-3); }
-  .ex{ display:flex; flex-direction:column; align-items:flex-start; gap:var(--s-2); width:100%; min-width:0; padding:var(--s-3); text-align:left; cursor:pointer;
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
+  .examples{ position:relative; display:flex; gap:var(--s-3); overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory;
+    overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  .examples::-webkit-scrollbar{ display:none; }
+  .ex{ flex:0 0 100%; display:flex; align-items:center; gap:var(--s-4); min-width:0; padding:var(--s-3); text-align:left; cursor:pointer;
+    scroll-snap-align:start; scroll-snap-stop:always;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
     transition:transform var(--t-fast) var(--ease), border-color var(--t-base), background var(--t-base); }
   .ex:active{ transform:scale(.98); }
   .ex.sel{ border-color:var(--accent); background:var(--accent-soft); }
+  .ex-anim{ position:relative; flex:none; width:104px; height:104px; border-radius:var(--r-sm); overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.07); }
+  .ex-af{ position:absolute; inset:0; opacity:0; transition:opacity var(--t-slow) var(--ease); }
+  .ex-af.was{ opacity:1; transition:none; }
+  .ex-af.on{ opacity:1; z-index:1; }
+  .ex-af svg{ width:100%; height:100%; display:block; }
+  .ex-txt{ min-width:0; }
+  .ex-txt .ex-when{ margin-top:var(--s-2); font-size:var(--fs-label); font-weight:600; letter-spacing:.02em; color:var(--text-3); font-variant-numeric:tabular-nums; }
+  .ex-dots{ display:flex; justify-content:center; }
+  .ex-dot{ width:20px; height:var(--tap); padding:0; border:0; background:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .ex-dot::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--line-strong); transition:background var(--t-base); }
+  .ex-dot.on::before{ background:var(--text); }
+  /* Small strips (landing, empty home) */
   .ex-strip{ display:flex; align-items:center; flex:none; }
   .ex-fr{ width:34px; height:34px; border-radius:var(--r-xs); overflow:hidden; display:inline-flex; box-shadow:0 1px 2px rgba(0,0,0,.07); }
   .ex-fr svg{ width:100%; height:100%; display:block; }
@@ -723,9 +738,9 @@
       </div>
 
       <div class="ld-demo">
-        <p class="ld-demo-lbl">For example: a plant, growing</p>
+        <p class="ld-demo-lbl">For example: a house, being built</p>
         <div class="ld-demo-strip" id="ldDemoStrip"></div>
-        <p class="ld-demo-cap">Or a build site, a haircut, a scar healing, your own progress, the moon night after night. Anything that changes slowly.</p>
+        <p class="ld-demo-cap">Or a child growing up, a garden through the seasons, a haircut, your own progress, the moon night after night. Anything that changes slowly.</p>
       </div>
 
       <p class="sectlbl">How it works</p>
@@ -1019,10 +1034,11 @@
   <div class="sheet">
     <div class="grab"></div>
     <h3>New project</h3>
-    <p class="sheet-sub">Track anything that changes over time. Tap an idea, or name your own.</p>
+    <p class="sheet-sub">Track anything that changes over time. Swipe through the ideas and tap one, or name your own.</p>
     <div class="examples" id="exampleList"></div>
+    <div class="ex-dots" id="exampleDots"></div>
     <label class="field-lbl" for="projName">Project name</label>
-    <input class="field" id="projName" placeholder="e.g. Living room plant" autocomplete="off">
+    <input class="field" id="projName" placeholder="e.g. Our house build" autocomplete="off">
     <div class="sheet-actions">
       <button class="btn ghost flex" id="newCancel">Cancel</button>
       <button class="btn primary flex" id="newCreate">Create</button>

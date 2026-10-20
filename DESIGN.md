@@ -274,7 +274,10 @@ Een nieuw onderdeel bouw je eerst uit deze componenten. Lukt dat niet, voeg dan 
 - **Elk onderwerp heeft één pastelachtergrond** (plant groen #EAF3EC, gebouw lucht #E4EEF9, kind roze #FBF0F3, maan nacht #1D2447) en een grond- of tafelstrook onderaan met een zachte schaduw onder het onderwerp.
 - **Licht van linksboven**: de linkerkant van een vorm is iets lichter, de rechterkant iets donkerder.
 - **Het onderwerp staat in elk frame op exact dezelfde plek.** Alleen de verandering beweegt (de plant groeit, het huis wordt gebouwd, de maan neemt toe). Zo leggen de tekeningen meteen uit wat Aligno doet.
-- Een reeks is altijd drie frames met een `›` ertussen.
+- Een reeks als strip (startpagina, lege Home) is altijd drie frames met een `›` ertussen.
+- **In de sheet New project speelt elk voorbeeld als tijdsverloop**: één grote tekening (104 px) die in vijf frames op dezelfde plek overvloeit (het nieuwe frame vervaagt in over het vorige, het eindresultaat blijft langer staan), met een tijdslabel eronder ("Month 4"). Zo toont de tekening letterlijk wat Aligno doet. De vier voorbeelden zijn pagina's om opzij te vegen, met puntjes eronder; alleen de zichtbare pagina speelt, en alleen zolang de sheet open is. Het gebouw komt eerst: Aligno draait niet om planten. Een strip met `›` zou hier te druk zijn.
+- Het huis (`buildIll(0..4)`): kale stijlen, dakspanten, beplating en onderdak, pleister met pannen en steiger, af met deur en tuin.
+- Het voorbeeld in het naamveld wisselt bij elke opening (`NAME_IDEAS`): echte projectnamen, geen zinnen.
 - Een nieuw voorbeeld: nieuwe functie in dezelfde stijl, toevoegen aan `EXAMPLES`, en dit lijstje kleuren aanvullen.
 
 ## 16. Tips, meldingen en pop-ups

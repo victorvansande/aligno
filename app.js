@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v52';
+const APP_VERSION = 'v53';
 /* --- Storage: IndexedDB with a projects store and a photos store (Blobs). --- */
 const DB_NAME = 'aligno';
 let db = null;
@@ -161,28 +161,36 @@ function personIll(g) {
   );
 }
 
+// A house from bare studs (0) to finished with a garden (4), always on the same slab.
 function buildIll(stage) {
   const sky = '<rect width="40" height="40" fill="#E4EEF9"/><circle cx="32" cy="8.5" r="5" fill="#FFD27A" opacity=".25"/><circle cx="32" cy="8.5" r="3.2" fill="#FFD27A"/>' +
-    '<rect y="30" width="40" height="10" fill="#CFBD95"/><rect y="29.4" width="40" height="1.4" fill="#9EC07E"/>';
-  if (stage === 0) {
-    return svg40(sky + '<path d="M10 30.2h20" stroke="#A9895C" stroke-width=".5" stroke-dasharray="1 1"/>' +
-      '<rect x="9.4" y="26.5" width="1.2" height="4" fill="#9C7A4E"/><rect x="29.4" y="26.5" width="1.2" height="4" fill="#9C7A4E"/>' +
-      '<path d="M10 27h20" stroke="#E8735A" stroke-width=".5"/>' +
-      '<rect x="31.5" y="24" width="5" height="3.5" rx=".5" fill="#F4F0E6"/><rect x="33.6" y="27.5" width=".8" height="3" fill="#9C7A4E"/>');
+    '<rect y="30" width="40" height="10" fill="#CFBD95"/><rect y="29.4" width="40" height="1.4" fill="#9EC07E"/>' +
+    '<rect x="9" y="28.8" width="22" height="1.6" fill="#B9B6AF"/>';
+  const crane = '<path d="M3 30V9h1.4v21M4.4 9.6h11" stroke="#E2A23B" stroke-width="1.1" fill="none"/><path d="M14 9.6v3.4" stroke="#7A7A80" stroke-width=".5"/>';
+  const lumber = '<rect x="32" y="27.4" width="5.6" height=".8" fill="#C99A63"/><rect x="32.4" y="28.3" width="5.6" height=".8" fill="#B98852"/><rect x="32" y="29.2" width="5.6" height=".8" fill="#C99A63"/>';
+  const roof = (a, b) => '<path d="M8 19.8L20 11l12 8.8z" fill="' + a + '"/><path d="M20 11l12 8.8h-3.4z" fill="' + b + '"/>';
+  const windows = (fill) => '<rect x="12.2" y="21.6" width="3.8" height="3.4" rx=".4" fill="' + fill + '"/><rect x="24" y="21.6" width="3.8" height="3.4" rx=".4" fill="' + fill + '"/>';
+  if (stage <= 1) {
+    let studs = '';
+    [10, 13.7, 17.4, 21.1, 24.8, 28.6].forEach(x => { studs += '<rect x="' + x + '" y="20.2" width="1.2" height="8.6" fill="#C99A63"/>'; });
+    const rafters = stage === 1
+      ? '<path d="M9.5 19.4L20 11.8 30.5 19.4M20 12v7M14.8 15.6v3.6M25.2 15.6v3.6" stroke="#B98852" stroke-width="1.1" fill="none" stroke-linejoin="round"/>'
+      : '';
+    return svg40(sky + (stage === 1 ? crane : '') + studs + '<rect x="10" y="19" width="19.8" height="1.2" fill="#B98852"/>' + rafters + lumber);
   }
-  if (stage === 1) {
-    let posts = '';
-    [10.5, 15.2, 19.9, 24.6, 29.3].forEach(px => { posts += '<rect x="' + px + '" y="19.5" width="1.2" height="9.5" fill="#C99A63"/>'; });
-    return svg40(sky + '<rect x="9" y="28.6" width="22" height="2.2" fill="#B9B6AF"/>' + posts +
-      '<rect x="10" y="19" width="20.6" height="1.3" fill="#B98852"/>' +
-      '<path d="M9.5 19.4L20.3 11.8 31.1 19.4" stroke="#B98852" stroke-width="1.2" fill="none" stroke-linejoin="round"/>' +
-      '<path d="M3 30V9h1.4v21M4.4 9.6h11" stroke="#E2A23B" stroke-width="1.1" fill="none"/><path d="M14 9.6v3.4" stroke="#7A7A80" stroke-width=".5"/>');
+  if (stage === 2) {
+    return svg40(sky + crane + '<rect x="10" y="19" width="20" height="9.8" fill="#D9BD8E"/><rect x="10" y="19" width="5" height="9.8" fill="#E2C99E"/>' +
+      roof('#8E929C', '#7E828C') + windows('#6F5A44') + '<rect x="18" y="23.6" width="4" height="5.2" fill="#6F5A44"/>' + lumber);
   }
-  return svg40(sky + '<rect x="10" y="19" width="20" height="11" fill="#F4E8D6"/><rect x="10" y="19" width="5" height="11" fill="#EBDDC8"/>' +
-    '<rect x="25.6" y="11.5" width="2.6" height="5" fill="#A9483A"/><path d="M8 19.8L20 11l12 8.8z" fill="#C8573C"/><path d="M20 11l12 8.8h-3.4z" fill="#B24A33"/>' +
-    '<rect x="18" y="23.6" width="4" height="6.4" rx=".6" fill="#8A6643"/>' +
-    '<rect x="12.2" y="21.6" width="3.8" height="3.4" rx=".4" fill="#A9D0EE"/><rect x="24" y="21.6" width="3.8" height="3.4" rx=".4" fill="#A9D0EE"/>' +
-    '<rect x="34.4" y="25" width="1" height="5" fill="#8A6643"/><circle cx="34.9" cy="23.6" r="3" fill="#5FAE6E"/><circle cx="34" cy="22.7" r="1.2" fill="#77C185"/>');
+  const walls = '<rect x="10" y="19" width="20" height="9.8" fill="#F4E8D6"/><rect x="10" y="19" width="5" height="9.8" fill="#EBDDC8"/>' +
+    '<rect x="25.6" y="11.5" width="2.6" height="5" fill="#A9483A"/>' + roof('#C8573C', '#B24A33') + windows('#A9D0EE');
+  if (stage === 3) {
+    return svg40(sky + walls + '<rect x="18" y="23.6" width="4" height="5.2" fill="#6F5A44"/>' +
+      '<path d="M7.6 30V16.5M12.4 30V16.5M7.6 21h4.8M7.6 25.5h4.8" stroke="#9A9AA0" stroke-width=".6"/>');
+  }
+  return svg40(sky + walls + '<rect x="18" y="23.6" width="4" height="5.2" rx=".6" fill="#8A6643"/>' +
+    '<rect x="34.4" y="25" width="1" height="5" fill="#8A6643"/><circle cx="34.9" cy="23.6" r="3" fill="#5FAE6E"/><circle cx="34" cy="22.7" r="1.2" fill="#77C185"/>' +
+    '<circle cx="6" cy="28.6" r="1.6" fill="#5FAE6E"/><circle cx="5.5" cy="28.1" r=".7" fill="#77C185"/>');
 }
 
 function moonIll(p) {
@@ -196,26 +204,100 @@ function moonIll(p) {
   );
 }
 
+// Each example plays as a time-lapse in the new project sheet: the subject
+// stays put and only the change moves, which is the whole point of Aligno.
 const EXAMPLES = [
-  { name: 'Living room plant', label: 'Plant', desc: 'Seedling to bloom', frames: [plantIll(0.18), plantIll(0.55), plantIll(1)] },
-  { name: 'House build', label: 'Building', desc: 'Plot to home', frames: [buildIll(0), buildIll(1), buildIll(2)] },
-  { name: 'Growing up', label: 'A child', desc: 'Year after year', frames: [personIll(0.25), personIll(0.6), personIll(1)] },
-  { name: 'The moon', label: 'The moon', desc: 'Night after night', frames: [moonIll(0.35), moonIll(0.68), moonIll(1)] }
+  { name: 'House build', label: 'Building', desc: 'Bare studs to a finished home',
+    when: ['Month 1', 'Month 2', 'Month 4', 'Month 6', 'Month 8'], frames: [0, 1, 2, 3, 4].map(buildIll) },
+  { name: 'Growing up', label: 'A child', desc: 'Same spot, every birthday',
+    when: ['Age 2', 'Age 4', 'Age 6', 'Age 8', 'Age 10'], frames: [0.1, 0.3, 0.55, 0.8, 1].map(personIll) },
+  { name: 'The moon', label: 'The moon', desc: 'Crescent to full moon',
+    when: ['Night 3', 'Night 5', 'Night 8', 'Night 11', 'Night 14'], frames: [0.2, 0.4, 0.6, 0.8, 1].map(moonIll) },
+  { name: 'Living room plant', label: 'Plant', desc: 'Seedling to bloom',
+    when: ['Week 1', 'Week 3', 'Week 6', 'Week 9', 'Week 12'], frames: [0.12, 0.35, 0.55, 0.8, 1].map(plantIll) }
 ];
+// Placeholder ideas for the project name; a different one each time the sheet opens.
+const NAME_IDEAS = ['Our house build', 'Kitchen renovation', 'Back garden through the year', "Baby's first year",
+  'Beard growth', 'View from my window', 'Puppy growing up', 'Fitness progress', 'Vegetable patch', 'Attic conversion',
+  'Street corner over the years', 'Tattoo healing', 'Hair growth', 'Treehouse build'];
 
 function strip(frames) {
   return frames.map((f, j) => (j ? '<span class="ex-ar">›</span>' : '') + '<span class="ex-fr">' + f + '</span>').join('');
 }
 function renderExamples() {
   const el = $('exampleList');
-  if (el) el.innerHTML = EXAMPLES.map(e =>
-    '<button class="ex" data-name="' + escapeHtml(e.name) + '"><span class="ex-strip">' + strip(e.frames) + '</span>' +
-    '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span></span></button>'
+  if (!el) return;
+  el.innerHTML = EXAMPLES.map(e =>
+    '<button class="ex" data-name="' + escapeHtml(e.name) + '"><span class="ex-anim">' +
+    e.frames.map((f, j) => '<span class="ex-af' + (j ? '' : ' on') + '">' + f + '</span>').join('') + '</span>' +
+    '<span class="ex-txt"><b>' + e.label + '</b><span>' + e.desc + '</span><span class="ex-when">' + e.when[0] + '</span></span></button>'
   ).join('');
+  $('exampleDots').innerHTML = EXAMPLES.map((e, i) =>
+    '<button class="ex-dot' + (i ? '' : ' on') + '" data-page="' + i + '" aria-label="' + e.label + '"></button>').join('');
 }
 function renderLandingDemo() {
   const el = $('ldDemoStrip');
-  if (el) el.innerHTML = strip([plantIll(0.16), plantIll(0.55), plantIll(1)]);
+  if (el) el.innerHTML = strip([buildIll(0), buildIll(2), buildIll(4)]);
+}
+
+/* --- Example pager: four swipeable pages, the visible one plays. --- */
+const exPager = { page: 0, frame: 0, timer: null };
+function exCards() { return $('exampleList').children; }
+function exVisiblePage() {
+  const list = $('exampleList'), cards = exCards();
+  let best = 0;
+  for (let i = 1; i < cards.length; i++) {
+    if (Math.abs(cards[i].offsetLeft - list.scrollLeft) < Math.abs(cards[best].offsetLeft - list.scrollLeft)) best = i;
+  }
+  return best;
+}
+function exShowFrame(card, i) {
+  const frs = card.querySelectorAll('.ex-af');
+  frs.forEach((f, j) => {
+    const was = f.classList.contains('on');
+    f.classList.toggle('on', j === i);
+    // The old frame stays under the new one until the new one has faded in.
+    f.classList.toggle('was', was && j !== i);
+  });
+  const ex = EXAMPLES[[...exCards()].indexOf(card)];
+  card.querySelector('.ex-when').textContent = ex.when[i];
+}
+function exSchedule() {
+  clearTimeout(exPager.timer);
+  const last = exPager.frame === EXAMPLES[exPager.page].frames.length - 1;
+  // Hold the finished result a bit longer before starting over.
+  exPager.timer = setTimeout(exStep, last ? 2200 : 1100);
+}
+function exStep() {
+  if (!$('newModal').classList.contains('on')) { exPager.timer = null; return; }
+  const card = exCards()[exPager.page];
+  exPager.frame = (exPager.frame + 1) % EXAMPLES[exPager.page].frames.length;
+  exShowFrame(card, exPager.frame);
+  exSchedule();
+}
+function exStart() {
+  const page = exVisiblePage();
+  if (page !== exPager.page) {
+    exShowFrame(exCards()[exPager.page], 0);
+    exPager.page = page;
+    $('exampleDots').querySelectorAll('.ex-dot').forEach((d, i) => d.classList.toggle('on', i === page));
+  }
+  exPager.frame = 0;
+  exShowFrame(exCards()[page], 0);
+  exSchedule();
+}
+function wireExamplePager() {
+  const list = $('exampleList');
+  let settle = null;
+  list.addEventListener('scroll', () => {
+    clearTimeout(settle);
+    settle = setTimeout(() => { if (exVisiblePage() !== exPager.page) exStart(); }, 90);
+  }, { passive: true });
+  $('exampleDots').addEventListener('click', e => {
+    const d = e.target.closest('[data-page]'); if (!d) return;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    list.scrollTo({ left: exCards()[+d.getAttribute('data-page')].offsetLeft, behavior: reduce ? 'auto' : 'smooth' });
+  });
 }
 
 /* --- App state, theme and screen navigation. --- */
@@ -476,7 +558,7 @@ async function renderHome() {
   const projects = (await dbProjects()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!projects.length) {
     list.innerHTML = '<div class="empty">' +
-      '<div class="empty-strip">' + strip([plantIll(0.18), plantIll(0.55), plantIll(1)]) + '</div>' +
+      '<div class="empty-strip">' + strip([buildIll(0), buildIll(2), buildIll(4)]) + '</div>' +
       '<h3>Start your first project</h3>' +
       '<p>One series of photos of the same subject, taken over time.</p></div>';
     return;
@@ -788,8 +870,12 @@ let newProjectAfterCreate = false;
 function openNewProjectModal(thenCamera) {
   newProjectAfterCreate = !!thenCamera;
   $('projName').value = '';
+  const ideas = NAME_IDEAS.filter(n => 'e.g. ' + n !== $('projName').placeholder);
+  $('projName').placeholder = 'e.g. ' + ideas[Math.floor(Math.random() * ideas.length)];
   $('exampleList').querySelectorAll('.ex').forEach(x => x.classList.remove('sel'));
+  $('exampleList').scrollLeft = 0;
   $('newModal').classList.add('on');
+  exStart();
 }
 function closeNewProjectModal() { $('newModal').classList.remove('on'); }
 async function createProject() {
@@ -3773,6 +3859,7 @@ function wire() {
   $('projName').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
   $('newModal').addEventListener('click', e => { if (e.target === $('newModal')) closeNewProjectModal(); });
   renderExamples();
+  wireExamplePager();
   renderLandingDemo();
   $('exampleList').addEventListener('click', (e) => {
     const b = e.target.closest('[data-name]'); if (!b) return;
