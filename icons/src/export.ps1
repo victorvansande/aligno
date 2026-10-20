@@ -18,7 +18,8 @@ function Render([string]$svg, [string]$png) {
   [IO.File]::WriteAllText($html, $page, (New-Object System.Text.UTF8Encoding($false)))
   # Edge logs harmless warnings to stderr; don't let them stop the script.
   $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-  & $edge --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 --force-device-scale-factor=1 "--window-size=1024,1024" "--screenshot=$png" "file:///$($html -replace '\\','/')" 2>&1 | Out-Null
+  # Own throwaway profile: an Edge that is already open cannot keep the render waiting.
+  & $edge --headless=new "--user-data-dir=$(Join-Path $tmp 'profile')" --no-first-run --disable-gpu --hide-scrollbars --default-background-color=00000000 --force-device-scale-factor=1 "--window-size=1024,1024" "--screenshot=$png" "file:///$($html -replace '\\','/')" 2>&1 | Out-Null
   $ErrorActionPreference = $prev
   if (-not (Test-Path $png)) { throw "Render failed for $svg" }
 }
@@ -41,15 +42,16 @@ function Resize([string]$from, [string]$to, [int]$size, [bool]$opaque) {
   "  $to ($size px)"
 }
 
-$full = Join-Path $tmp 'full.png'; $rounded = Join-Path $tmp 'rounded.png'; $mono = Join-Path $tmp 'mono.png'; $small = Join-Path $tmp 'small.png'
-Remove-Item $full, $rounded, $mono, $small -ErrorAction SilentlyContinue
+$full = Join-Path $tmp 'full.png'; $rounded = Join-Path $tmp 'rounded.png'; $mono = Join-Path $tmp 'mono.png'; $small = Join-Path $tmp 'small.png'; $ios = Join-Path $tmp 'ios.png'
+Remove-Item $full, $rounded, $mono, $small, $ios -ErrorAction SilentlyContinue
 Render 'icon-full.svg' $full
 Render 'icon-rounded.svg' $rounded
 Render 'icon-mono.svg' $mono
 Render 'icon-small.svg' $small
+Render 'icon-ios.svg' $ios
 
 'Writing icons:'
-Resize $full 'apple-touch-icon.png' 180 $true      # iPhone / iPad home screen (iOS rounds the corners)
+Resize $ios 'apple-touch-icon.png' 180 $true       # iPhone / iPad home screen (iOS rounds the corners)
 Resize $full 'icon-512-maskable.png' 512 $true     # Android adaptive icon (any mask shape)
 Resize $full 'icon-192-maskable.png' 192 $true
 Resize $rounded 'icon-512.png' 512 $false          # computers, splash screens, "any"

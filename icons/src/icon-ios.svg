@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Aligno app icon for the iPhone and iPad home screen, full bleed (apple-touch-icon).
+       iPhone and iPad: iOS only rounds the corners, so the mark can be larger than on Android: scale 1.32. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A2A2D"/>
+      <stop offset="1" stop-color="#1C1C1E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  
+  <g transform="translate(261 261) scale(1.32) translate(-256 -256)">
+    <rect x="128" y="128" width="190" height="190" rx="54" fill="#fff" fill-opacity=".14" stroke="#fff" stroke-opacity=".78" stroke-width="22"/>
+    <rect x="194" y="194" width="190" height="190" rx="54" fill="#fff"/>
+    <path d="M300 300L232 232M232 232h56M232 232v56" fill="none" stroke="#1C1C1E" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
